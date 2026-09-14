@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Products - Admin</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
+    >
+
+    <style>
+        .admin-page {
+            width: min(1100px, 95%);
+            margin: 30px auto;
+        }
+
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .admin-header a {
+            text-decoration: none;
+            color: #2563eb;
+        }
+
+        .form-card {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .form-grid textarea {
+            grid-column: span 2;
+        }
+
+        .form-grid input,
+        .form-grid textarea {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .form-card button {
+            margin-top: 12px;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            background: #2563eb;
+            color: white;
+            cursor: pointer;
+        }
+
+        .products-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        .products-table th,
+        .products-table td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+
+        .products-table th {
+            background: #1f2937;
+            color: white;
+        }
+
+        .inactive {
+            opacity: 0.5;
+        }
+
+        .action-form {
+            display: inline;
+        }
+
+        .action-button {
+            padding: 6px 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .edit-button {
+            background: #e5e7eb;
+        }
+
+        .deactivate-button {
+            background: #fee2e2;
+        }
+
+        .edit-form {
+            display: none;
+            margin-top: 10px;
+        }
+
+        .edit-form input,
+        .edit-form textarea {
+            width: 100%;
+            margin-bottom: 6px;
+            padding: 7px;
+        }
+
+        .edit-form button {
+            padding: 7px 12px;
+            border: none;
+            border-radius: 5px;
+            background: #2563eb;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="admin-page">
+
+    <div class="admin-header">
+        <div>
+            <h1>Products</h1>
+            <p>Manage your product catalog.</p>
+        </div>
+
+        <a href="{{ url_for('admin.dashboard') }}">
+            ← Dashboard
+        </a>
+    </div>
+
+
+    <!-- Create Product -->
+
+    <div class="form-card">
+
+        <h2>Add Product</h2>
+
+        <form method="POST"
+              action="{{ url_for('admin.create_product') }}">
+
+            <div class="form-grid">
+
+                <input
+                    type="text"
+                    name="name"
+                    placeholder="Product name"
+                    required
+                >
+
+                <input
+                    type="text"
+                    name="category"
+                    placeholder="Category"
+                    required
+                >
+
+                <textarea
+                    name="description"
+                    placeholder="Description"
+                    rows="3"
+                    required
+                ></textarea>
+
+                <input
+                    type="number"
+                    name="price"
+                    placeholder="Price"
+                    step="0.01"
+                    min="0"
+                    required
+                >
+
+                <input
+                    type="number"
+                    name="stock_quantity"
+                    placeholder="Stock quantity"
+                    min="0"
+                    required
+                >
+
+            </div>
+
+            <button type="submit">
+                Add Product
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <!-- Products Table -->
+
+    <h2>Product Catalog</h2>
+
+    <table class="products-table">
+
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Category</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+        {% for product in products %}
+
+            <tr class="{% if not product.is_active %}inactive{% endif %}">
+
+                <td>{{ product.id }}</td>
+
+                <td>{{ product.name }}</td>
+
+                <td>{{ product.category }}</td>
+
+                <td>${{ "%.2f"|format(product.price) }}</td>
+
+                <td>{{ product.stock_quantity }}</td>
+
+                <td>
+                    {% if product.is_active %}
+                        Active
+                    {% else %}
+                        Inactive
+                    {% endif %}
+                </td>
+
+                <td>
+
+                    {% if product.is_active %}
+
+                        <button
+                            class="action-button edit-button"
+                            onclick="toggleEdit({{ product.id }})"
+                        >
+                            Edit
+                        </button>
+
+                        <form
+                            class="action-form"
+                            method="POST"
+                            action="{{ url_for(
+                                'admin.deactivate_product',
+                                product_id=product.id
+                            ) }}"
+                        >
+                            <button
+                                type="submit"
+                                class="action-button deactivate-button"
+                            >
+                                Deactivate
+                            </button>
+                        </form>
+
+                    {% endif %}
+
+                </td>
+
+            </tr>
+
+
+            {% if product.is_active %}
+
+            <tr id="edit-{{ product.id }}"
+                class="edit-form">
+
+                <td colspan="7">
+
+                    <form
+                        method="POST"
+                        action="{{ url_for(
+                            'admin.edit_product',
+                            product_id=product.id
+                        ) }}"
+                    >
+
+                        <input
+                            type="text"
+                            name="name"
+                            value="{{ product.name }}"
+                            required
+                        >
+
+                        <textarea
+                            name="description"
+                            rows="2"
+                            required
+                        >{{ product.description }}</textarea>
+
+                        <input
+                            type="text"
+                            name="category"
+                            value="{{ product.category }}"
+                            required
+                        >
+
+                        <input
+                            type="number"
+                            name="price"
+                            value="{{ product.price }}"
+                            step="0.01"
+                            min="0"
+                            required
+                        >
+
+                        <input
+                            type="number"
+                            name="stock_quantity"
+                            value="{{ product.stock_quantity }}"
+                            min="0"
+                            required
+                        >
+
+                        <button type="submit">
+                            Save Changes
+                        </button>
+
+                    </form>
+
+                </td>
+
+            </tr>
+
+            {% endif %}
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+
+</div>
+
+
+<script>
+    function toggleEdit(productId) {
+        const row = document.getElementById(`edit-${productId}`);
+
+        if (row.style.display === "table-row") {
+            row.style.display = "none";
+        } else {
+            row.style.display = "table-row";
+        }
+    }
+</script>
+
+</body>
+</html>
