@@ -1,5 +1,4 @@
 from langchain_groq import ChatGroq
-
 from app.config import Config
 
 
