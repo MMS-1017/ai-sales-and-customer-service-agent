@@ -2,19 +2,15 @@ from flask import Flask
 
 from app.config import Config
 from app.extensions import db
-from app.models import (
-    Customer,
-    Product,
-    Order,
-    OrderItem,
-    KnowledgeDocument,
-)
-
+from app.models import Customer, Product, Order, OrderItem, KnowledgeDocument
+from app.controllers.chat_controller import chat_bp
 
 def create_app():
     app = Flask(__name__)
 
     app.config.from_object(Config)
+
+    app.register_blueprint(chat_bp)
 
     db.init_app(app)
 
