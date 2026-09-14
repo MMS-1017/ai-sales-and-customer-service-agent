@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Admin Dashboard</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
+    >
+</head>
+
+<body>
+
+<div class="chat-container">
+
+    <header class="chat-header">
+        <h1>Admin Dashboard</h1>
+        <p>AI Sales Agent Management</p>
+    </header>
+
+    <main class="chat-messages">
+
+        <div class="message assistant">
+            <div class="message-content">
+                <strong>Products</strong>
+                <br>
+                {{ stats.products }}
+            </div>
+        </div>
+
+        <div class="message assistant">
+            <div class="message-content">
+                <strong>Orders</strong>
+                <br>
+                {{ stats.orders }}
+            </div>
+        </div>
+
+        <div class="message assistant">
+            <div class="message-content">
+                <strong>Customers</strong>
+                <br>
+                {{ stats.customers }}
+            </div>
+        </div>
+
+        <div class="message assistant">
+            <div class="message-content">
+                <strong>Knowledge Documents</strong>
+                <br>
+                {{ stats.knowledge_documents }}
+            </div>
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+</html>

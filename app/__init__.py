@@ -4,6 +4,7 @@ from app.config import Config
 from app.extensions import db
 from app.models import Customer, Product, Order, OrderItem, KnowledgeDocument
 from app.controllers.chat_controller import chat_bp
+from app.controllers.admin_controller import admin_bp
 
 def create_app():
 
@@ -16,7 +17,8 @@ def create_app():
     app.config.from_object(Config)
 
     app.register_blueprint(chat_bp)
-
+    app.register_blueprint(admin_bp)
+    
     db.init_app(app)
 
     with app.app_context():
