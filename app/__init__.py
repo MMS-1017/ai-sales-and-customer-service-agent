@@ -6,7 +6,12 @@ from app.models import Customer, Product, Order, OrderItem, KnowledgeDocument
 from app.controllers.chat_controller import chat_bp
 
 def create_app():
-    app = Flask(__name__)
+
+    app = Flask(
+        __name__,
+        template_folder="views/templates",
+        static_folder="views/static",
+    )
 
     app.config.from_object(Config)
 
