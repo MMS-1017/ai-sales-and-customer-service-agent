@@ -1,28 +1,35 @@
 from app.extensions import db
 from app.models import KnowledgeDocument
 from app.config import Config
-from app.rag import (
-    EmbeddingService,
-    ChromaVectorStore,
-    KnowledgeIngestionService,
-)
 
+from app.rag.embeddings import EmbeddingService
+from app.rag.vectorstore import ChromaVectorStore
+from app.rag.ingestion import KnowledgeIngestionService
 
 class KnowledgeService:
 
     @staticmethod
     def _get_ingestion_service():
+
         embedding_service = EmbeddingService(
             Config.EMBEDDING_MODEL
         )
 
         vector_store = ChromaVectorStore(
-            Config.CHROMA_PATH
+            path=Config.CHROMA_PATH
         )
 
         return KnowledgeIngestionService(
-            embedding_service,
-            vector_store,
+            embedding_service=embedding_service,
+            vector_store=vector_store,
+        )
+
+    @staticmethod
+    def list_documents():
+        return (
+            KnowledgeDocument.query
+            .order_by(KnowledgeDocument.updated_at.desc())
+            .all()
         )
 
     @staticmethod
@@ -32,156 +39,162 @@ class KnowledgeService:
             document_id,
         )
 
-    @staticmethod
-    def list_documents():
-        return KnowledgeDocument.query.order_by(
-            KnowledgeDocument.created_at.desc()
-        ).all()
 
     @staticmethod
-    def create_document(title, content, category, source=None):
+    def create_document(title: str, content: str, category: str, source: str | None = None):
 
-        if not title or not title.strip():
-            raise ValueError("Title is required.")
+        title = title.strip()
+        content = content.strip()
+        category = category.strip()
 
-        if not content or not content.strip():
-            raise ValueError("Content is required.")
+        if not title:
+            return {
+                "success": False,
+                "error": "Title is required.",
+            }
 
-        if not category or not category.strip():
-            raise ValueError("Category is required.")
-
-        document = KnowledgeDocument(
-            title=title.strip(),
-            content=content.strip(),
-            category=category.strip(),
-            source=source.strip() if source else None,
-        )
-
-        db.session.add(document)
-        db.session.commit()
+        if not content:
+            return {
+                "success": False,
+                "error": "Content is required.",
+            }
 
         try:
+
+            document = KnowledgeDocument(
+                title=title,
+                content=content,
+                category=category,
+                source=source.strip() if source else None,
+            )
+
+            db.session.add(document)
+            db.session.commit()
+
             ingestion_service = (
                 KnowledgeService._get_ingestion_service()
             )
 
-            ingestion_service.ingest_document(document)
+            chunks = ingestion_service.ingest_document(
+                document
+            )
+
+            return {
+                "success": True,
+                "document_id": document.id,
+                "chunks": chunks,
+            }
 
         except Exception:
-            # Database document remains available even if
-            # vector indexing fails.
-            print(
-                f"Warning: Failed to index document "
-                f"{document.id} in Chroma."
-            )
 
-        return document
+            db.session.rollback()
+
+            return {
+                "success": False,
+                "error": "Failed to create knowledge document.",
+            }
 
     @staticmethod
-    def update_document(document_id, title=None, content=None, category=None, source=None):
+    def update_document(document_id: int, title: str, content: str, 
+                        category: str, source: str | None = None):
 
-        document = KnowledgeService.get_document(
-            document_id
-        )
+        document = KnowledgeService.get_document(document_id)
 
         if not document:
-            return None
+            return {
+                "success": False,
+                "error": "Knowledge document not found.",
+            }
 
-        if title is not None:
-            if not title.strip():
-                raise ValueError("Title is required.")
-            document.title = title.strip()
+        title = title.strip()
+        content = content.strip()
+        category = category.strip()
 
-        if content is not None:
-            if not content.strip():
-                raise ValueError("Content is required.")
-            document.content = content.strip()
+        if not title:
+            return {
+                "success": False,
+                "error": "Title is required.",
+            }
 
-        if category is not None:
-            if not category.strip():
-                raise ValueError("Category is required.")
-            document.category = category.strip()
-
-        if source is not None:
-            document.source = (
-                source.strip() if source else None
-            )
-
-        db.session.commit()
+        if not content:
+            return {
+                "success": False,
+                "error": "Content is required.",
+            }
 
         try:
+
+            document.title = title
+            document.content = content
+            document.category = category
+            document.source = (source.strip() if source else None)
+
+            db.session.commit()
+
             ingestion_service = (
                 KnowledgeService._get_ingestion_service()
             )
 
-            collection = (
-                ingestion_service.vector_store.collection
+            vector_store = (
+                ingestion_service.vector_store
             )
 
-            existing = collection.get(
-                where={
-                    "document_id": str(document_id)
-                }
-            )
+            # Remove old chunks
+            vector_store.delete_document(document.id)
 
-            existing_ids = existing.get("ids", [])
+            # Index updated document
+            chunks = ingestion_service.ingest_document(document)
 
-            if existing_ids:
-                ingestion_service.vector_store.delete_documents(
-                    existing_ids
-                )
-
-            ingestion_service.ingest_document(document)
+            return {
+                "success": True,
+                "document_id": document.id,
+                "chunks": chunks,
+            }
 
         except Exception:
-            print(
-                f"Warning: Failed to re-index document "
-                f"{document.id} in Chroma."
-            )
 
-        return document
+            db.session.rollback()
 
+            return {
+                "success": False,
+                "error": "Failed to update knowledge document.",
+            }
 
     @staticmethod
-    def delete_document(document_id):
-        document = KnowledgeService.get_document(
-            document_id
-        )
+    def delete_document(document_id: int):
 
+        document = KnowledgeService.get_document(document_id)
         if not document:
-            return False
+            return {
+                "success": False,
+                "error": "Knowledge document not found.",
+            }
 
-        # Get the vector store before deleting the DB record.
-        ingestion_service = (
-            KnowledgeService._get_ingestion_service()
-        )
-
-        # Current implementation uses one chunk ID per chunk.
-        # We first inspect the existing chunks.
         try:
-            collection = (
-                ingestion_service.vector_store.collection
-            )
-            existing = collection.get(
-                where={
-                    "document_id": str(document_id)
-                }
+
+            ingestion_service = (
+                KnowledgeService._get_ingestion_service()
             )
 
-            existing_ids = existing.get("ids", [])
+            # Remove document chunks from Chroma
+            ingestion_service.vector_store.delete_document(
+                document.id
+            )
 
-            if existing_ids:
-                ingestion_service.vector_store.delete_documents(
-                    existing_ids
-                )
+            # Remove document from PostgreSQL
+            db.session.delete(document)
+            db.session.commit()
+
+            return {
+                "success": True,
+                "document_id": document_id,
+            }
 
         except Exception:
-            print(
-                f"Warning: Failed to remove vectors "
-                f"for document {document_id}."
-            )
 
-        db.session.delete(document)
-        db.session.commit()
+            db.session.rollback()
 
-        return True
+            return {
+                "success": False,
+                "error": "Failed to delete knowledge document.",
+            }

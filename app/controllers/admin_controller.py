@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for
 
 from app.extensions import db
 from app.models import Customer, Order, Product, KnowledgeDocument
-
+from app.services import KnowledgeService
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -141,3 +141,67 @@ def customers():
         "customers.html",
         customers=customers,
     )
+
+# =========================
+# Knowledge Documents
+# =========================
+
+@admin_bp.get("/knowledge")
+def knowledge():
+
+    documents = KnowledgeService.list_documents()
+    return render_template("knowledge.html", documents=documents)
+
+
+@admin_bp.post("/knowledge/create")
+def create_knowledge():
+    
+    title = request.form.get("title", "")
+    content = request.form.get("content", "")
+    category = request.form.get("category", "")
+    source = request.form.get("source", "")
+
+    result = KnowledgeService.create_document(
+        title=title,
+        content=content,
+        category=category,
+        source=source,
+    )
+
+    if not result["success"]:
+        return result["error"], 400
+
+    return redirect(url_for("admin.knowledge"))
+
+
+@admin_bp.post("/knowledge/<int:document_id>/edit")
+def edit_knowledge(document_id):
+
+    title = request.form.get("title", "")
+    content = request.form.get("content", "")
+    category = request.form.get("category", "")
+    source = request.form.get("source", "")
+
+    result = KnowledgeService.update_document(
+        document_id=document_id,
+        title=title,
+        content=content,
+        category=category,
+        source=source,
+    )
+
+    if not result["success"]:
+        return result["error"], 400
+
+    return redirect(url_for("admin.knowledge"))
+
+
+@admin_bp.post("/knowledge/<int:document_id>/delete")
+def delete_knowledge(document_id):
+
+    result = KnowledgeService.delete_document(document_id)
+
+    if not result["success"]:
+        return result["error"], 404
+
+    return redirect(url_for("admin.knowledge"))

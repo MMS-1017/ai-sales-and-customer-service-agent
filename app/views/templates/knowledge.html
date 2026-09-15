@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Knowledge Base</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
+    >
+
+    <style>
+
+        .admin-page {
+            width: min(1200px, 95%);
+            margin: 30px auto;
+        }
+
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .admin-header a {
+            text-decoration: none;
+            color: #2563eb;
+        }
+
+        .form-card {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        .form-card input,
+        .form-card textarea,
+        .form-card select {
+            width: 100%;
+            margin-bottom: 12px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .form-card textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+
+        button {
+            padding: 9px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .primary-button {
+            background: #2563eb;
+            color: white;
+        }
+
+        .delete-button {
+            background: #fee2e2;
+        }
+
+        .documents {
+            display: grid;
+            gap: 20px;
+        }
+
+        .document-card {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            background: white;
+        }
+
+        .document-card h3 {
+            margin-top: 0;
+        }
+
+        .document-meta {
+            color: #6b7280;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+
+        .document-content {
+            white-space: pre-wrap;
+            line-height: 1.5;
+            margin-bottom: 15px;
+        }
+
+        .edit-form {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+
+        .edit-form input,
+        .edit-form textarea,
+        .edit-form select {
+            width: 100%;
+            margin-bottom: 8px;
+            padding: 8px;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<div class="admin-page">
+
+    <div class="admin-header">
+
+        <div>
+            <h1>Knowledge Base</h1>
+
+            <p>
+                Manage documents used by the RAG system.
+            </p>
+        </div>
+
+        <a href="{{ url_for('admin.dashboard') }}">
+            ← Dashboard
+        </a>
+
+    </div>
+
+
+    <!-- Create -->
+
+    <div class="form-card">
+
+        <h2>Add Knowledge Document</h2>
+
+        <form
+            method="POST"
+            action="{{ url_for('admin.create_knowledge') }}"
+        >
+
+            <input
+                type="text"
+                name="title"
+                placeholder="Document title"
+                required
+            >
+
+            <select name="category" required>
+
+                <option value="">
+                    Select category
+                </option>
+
+                <option value="product">
+                    Product
+                </option>
+
+                <option value="policy">
+                    Policy
+                </option>
+
+                <option value="shipping">
+                    Shipping
+                </option>
+
+                <option value="warranty">
+                    Warranty
+                </option>
+
+                <option value="payment">
+                    Payment
+                </option>
+
+                <option value="faq">
+                    FAQ
+                </option>
+
+            </select>
+
+            <input
+                type="text"
+                name="source"
+                placeholder="Source (optional)"
+            >
+
+            <textarea
+                name="content"
+                placeholder="Knowledge document content..."
+                required
+            ></textarea>
+
+            <button
+                type="submit"
+                class="primary-button"
+            >
+                Add Document
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <!-- Existing Documents -->
+
+    <h2>Documents</h2>
+
+    <div class="documents">
+
+        {% for document in documents %}
+
+        <div class="document-card">
+
+            <h3>
+                {{ document.title }}
+            </h3>
+
+            <div class="document-meta">
+
+                Category:
+                <strong>
+                    {{ document.category }}
+                </strong>
+
+                {% if document.source %}
+                    | Source: {{ document.source }}
+                {% endif %}
+
+            </div>
+
+
+            <div class="document-content">
+                {{ document.content }}
+            </div>
+
+
+            <button
+                onclick="toggleEdit({{ document.id }})"
+            >
+                Edit
+            </button>
+
+
+            <form
+                method="POST"
+                action="{{ url_for(
+                    'admin.delete_knowledge',
+                    document_id=document.id
+                ) }}"
+                style="display:inline;"
+            >
+
+                <button
+                    type="submit"
+                    class="delete-button"
+                    onclick="return confirm(
+                        'Delete this knowledge document?'
+                    )"
+                >
+                    Delete
+                </button>
+
+            </form>
+
+
+            <!-- Edit Form -->
+
+            <div
+                id="edit-{{ document.id }}"
+                class="edit-form"
+                style="display:none;"
+            >
+
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'admin.edit_knowledge',
+                        document_id=document.id
+                    ) }}"
+                >
+
+                    <input
+                        type="text"
+                        name="title"
+                        value="{{ document.title }}"
+                        required
+                    >
+
+                    <select
+                        name="category"
+                        required
+                    >
+
+                        <option value="product"
+                            {% if document.category == "product" %}
+                                selected
+                            {% endif %}
+                        >
+                            Product
+                        </option>
+
+                        <option value="policy"
+                            {% if document.category == "policy" %}
+                                selected
+                            {% endif %}
+                        >
+                            Policy
+                        </option>
+
+                        <option value="shipping"
+                            {% if document.category == "shipping" %}
+                                selected
+                            {% endif %}
+                        >
+                            Shipping
+                        </option>
+
+                        <option value="warranty"
+                            {% if document.category == "warranty" %}
+                                selected
+                            {% endif %}
+                        >
+                            Warranty
+                        </option>
+
+                        <option value="payment"
+                            {% if document.category == "payment" %}
+                                selected
+                            {% endif %}
+                        >
+                            Payment
+                        </option>
+
+                        <option value="faq"
+                            {% if document.category == "faq" %}
+                                selected
+                            {% endif %}
+                        >
+                            FAQ
+                        </option>
+
+                    </select>
+
+                    <input
+                        type="text"
+                        name="source"
+                        value="{{ document.source or '' }}"
+                    >
+
+                    <textarea
+                        name="content"
+                        required
+                    >{{ document.content }}</textarea>
+
+                    <button
+                        type="submit"
+                        class="primary-button"
+                    >
+                        Save Changes
+                    </button>
+
+                </form>
+
+            </div>
+
+        </div>
+
+        {% else %}
+
+        <p>
+            No knowledge documents found.
+        </p>
+
+        {% endfor %}
+
+    </div>
+
+</div>
+
+
+<script>
+
+function toggleEdit(documentId) {
+
+    const form = document.getElementById(
+        `edit-${documentId}`
+    );
+
+    if (form.style.display === "none") {
+
+        form.style.display = "block";
+
+    } else {
+
+        form.style.display = "none";
+
+    }
+
+}
+
+</script>
+
+</body>
+
+</html>

@@ -190,6 +190,10 @@
             Customers
         </a>
 
+        <a href="{{ url_for('admin.knowledge') }}">
+            Knowledge Base
+        </a>
+
         <a href="{{ url_for('chat.chat_page') }}">
             Customer Chat
         </a>
@@ -197,7 +201,7 @@
     </nav>
 
 
-    <!-- Content -->
+    <!-- Main Content -->
 
     <main class="content">
 
@@ -255,7 +259,7 @@
         </section>
 
 
-        <!-- Quick Actions -->
+        <!-- Quick Management -->
 
         <section class="section">
 
@@ -295,6 +299,18 @@
 
                     <span>
                         Review customers and their order history.
+                    </span>
+                </a>
+
+
+                <a
+                    class="quick-link"
+                    href="{{ url_for('admin.knowledge') }}"
+                >
+                    <strong>Manage Knowledge</strong>
+
+                    <span>
+                        Add, update, and delete RAG documents.
                     </span>
                 </a>
 

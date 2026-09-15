@@ -6,6 +6,7 @@ from app.models import Customer, Product, Order, OrderItem, KnowledgeDocument
 from app.controllers.chat_controller import chat_bp
 from app.controllers.admin_controller import admin_bp
 
+
 def create_app():
 
     app = Flask(
