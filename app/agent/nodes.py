@@ -9,39 +9,35 @@ from app.services import ProductService
 
 class ProductRequest(BaseModel):
     product_name: str | None = Field(
-        default=None,
-        description="The product name mentioned by the customer.",
-    )
+                                    default=None,
+                                    description="The product name mentioned by the customer.",
+                                )
 
     quantity: int | None = Field(
-        default=None,
-        description="The requested quantity.",
-    )
+                                default=None,
+                                gt=0,
+                                description="The requested quantity."
+                            )
 
 
 #---------------------------------Intent Understanding Node--------------------------------------
 def understand_request(state):
-    messages = state.get("messages", [])
-
-    if not messages:
-        return {
-            "intent": "unknown",
-            "error": "No user message provided.",
-        }
-
-    user_message = messages[-1]
-
     llm = get_llm()
 
+    messages = state.get("messages", [])
+    conversation_history = "\n".join(str(message) for message in messages[:-1])
+    latest_message = messages[-1]
+
     prompt = INTENT_PROMPT.format(
-        message=user_message
+        conversation_history=conversation_history,
+        message=latest_message,
     )
 
-    response = llm.invoke(prompt)
+    result = llm.invoke(prompt)
 
-    intent = response.content.strip().lower()
+    intent = result.content.strip().lower()
 
-    valid_intents = {
+    allowed_intents = {
         "product_search",
         "product_question",
         "recommendation",
@@ -52,12 +48,10 @@ def understand_request(state):
         "unknown",
     }
 
-    if intent not in valid_intents:
+    if intent not in allowed_intents:
         intent = "unknown"
 
-    return {
-        "intent": intent
-    }
+    return {"intent": intent}
 
 #----------------------------------Tool Input Preparation Node--------------------------------------
 def prepare_tool_input(state):
@@ -66,52 +60,58 @@ def prepare_tool_input(state):
     quantity = state.get("quantity")
     customer_id = state.get("customer_id")
 
-    if not tool_name:
-        return {
-            "tool_input": None
-        }
+    print("========== PREPARE TOOL DEBUG ==========")
+    print("TOOL:", tool_name)
+    print("PRODUCT ID:", product_id)
+    print("QUANTITY:", quantity)
+    print("CUSTOMER ID:", customer_id)
+    print("========================================")
 
     if not product_id:
         return {
-            "error": "Product could not be resolved.",
-            "tool_input": None,
+            "tool_input": {},
+            "error": "Product could not be identified."
         }
 
-    if not quantity or quantity <= 0:
+    if tool_name == "get_product_details":
         return {
-            "error": "A valid quantity is required.",
-            "tool_input": None,
+            "tool_input": {
+                "product_id": product_id
+            }
         }
 
     if tool_name == "check_product_availability":
+        if not quantity:
+            return {
+                "tool_input": {},
+                "error": "Please specify the quantity."
+            }
+
         return {
             "tool_input": {
                 "product_id": product_id,
-                "quantity": quantity,
+                "quantity": quantity
             }
         }
 
     if tool_name == "create_order":
-        if not customer_id:
+        if not quantity:
             return {
-                "error": "Customer context is required.",
-                "tool_input": None,
+                "tool_input": {},
+                "error": "Please specify the quantity."
             }
 
         return {
             "tool_input": {
                 "customer_id": customer_id,
                 "product_id": product_id,
-                "quantity": quantity,
+                "quantity": quantity
             }
         }
 
     return {
-        "error": "Unsupported tool.",
-        "tool_input": None,
+        "tool_input": {}
     }
-
-
 # ---------------------------------Retrieval Node--------------------------------------
 def retrieve_context(state):
     intent = state.get("intent", "")
@@ -159,186 +159,185 @@ def agent_decision(state):
     intent = state.get("intent")
 
     if intent == "availability_check":
-        return {
-            "tool_name": "check_product_availability"
-        }
+        tool_name = "check_product_availability"
 
-    if intent == "create_order":
-        return {
-            "tool_name": "create_order"
-        }
+    elif intent == "create_order":
+        tool_name = "create_order"
 
-    return {
-        "tool_name": None
-    }
+    elif intent in {"product_question", "product_search"}:
+        tool_name = "get_product_details"
+
+    else:
+        tool_name = None
+
+    print("========== AGENT DEBUG ==========")
+    print("INTENT:", intent)
+    print("PRODUCT:", state.get("product_name"))
+    print("PRODUCT ID:", state.get("product_id"))
+    print("TOOL:", tool_name)
+    print("=================================")
+
+    return {"tool_name": tool_name}
+
 # ---------------------------------Generation Node--------------------------------------
 def generate_response(state):
-    messages = state.get("messages", [])
-    intent = state.get("intent", "unknown")
-    context = state.get("retrieved_context", [])
-    tool_result = state.get("tool_result")
-
-    if not messages:
-        return {
-            "response": "I couldn't process your request."
-        }
-
-    user_message = messages[-1]
 
     llm = get_llm()
 
-    context_text = "\n\n".join(
-        item["content"]
-        for item in context
-    )
+    conversation_history = "\n".join(
+                                    str(message)
+                                    for message in state.get("messages", [])
+                                )
 
-    tool_text = ""
+    retrieved_context = state.get("retrieved_context", [])
 
-    if tool_result:
-        tool_text = str(tool_result)
+    tool_result = state.get("tool_result")
 
     prompt = f"""
-{SYSTEM_PROMPT}
+            {SYSTEM_PROMPT}
 
-Intent:
-{intent}
+            Conversation history:
+            {conversation_history}
 
-Retrieved context:
-{context_text or "No relevant context found."}
+            Current intent:
+            {state.get("intent", "unknown")}
 
-Tool result:
-{tool_text or "No tool was used."}
+            Retrieved knowledge:
+            {retrieved_context}
 
-Customer message:
-{user_message}
+            Backend tool result:
+            {tool_result}
 
-Generate the final answer to the customer.
-"""
+            Answer the user's latest message.
 
-    response = llm.invoke(prompt)
+            The backend tool result has priority for:
+            - product price
+            - product stock
+            - product existence
+            - order status
+            - order details
 
-    return {
-        "response": response.content.strip()
-    }
+            If the backend tool result contains the requested information,
+            answer directly using that information.
+
+            Do not ask for additional product attributes unless they are
+            required by the actual backend data model.
+
+            Do not invent variants or configurations.
+
+            Latest user message:
+            {state["messages"][-1]}
+        """
+
+    result = llm.invoke(prompt)
+
+    return {"response": result.content}
 
 # ---------------------------------Tool Execution Node--------------------------------------
 def execute_tool(state):
+    print("========== TOOL DEBUG ==========")
+    print("TOOL NAME:", state.get("tool_name"))
+    print("TOOL INPUT:", state.get("tool_input"))
+    print("================================")
+
     tool_name = state.get("tool_name")
     tool_input = state.get("tool_input")
-
-    if not tool_name:
-        return {
-            "tool_result": None
-        }
-
-    if not tool_input:
-        return {
-            "tool_result": {
-                "success": False,
-                "error": "Tool input is missing.",
-            }
-        }
 
     tool = TOOLS.get(tool_name)
 
     if not tool:
-        return {
-            "tool_result": {
-                "success": False,
-                "error": "Unknown tool.",
-            }
+        result = {
+            "success": False,
+            "error": f"Unknown tool: {tool_name}"
         }
+        print("TOOL RESULT:", result)
+        return {"tool_result": result}
 
     try:
         result = tool.invoke(tool_input)
+
+        print("TOOL RESULT:", result)
 
         return {
             "tool_result": result
         }
 
     except Exception as exc:
+        print("TOOL ERROR:", exc)
+
         return {
             "tool_result": {
-                "success": False,\
-                "error": str(exc),
+                "success": False,
+                "error": str(exc)
             }
         }
 # ---------------------------------Product Extraction--------------------------------------
 def extract_product_request(state):
-    messages = state.get("messages", [])
-
-    if not messages:
-        return {
-            "product_name": None,
-            "quantity": None,
-        }
-
-    intent = state.get("intent")
-
-    if intent not in {
-        "availability_check",
-        "create_order",
-    }:
-        return {
-            "product_name": None,
-            "quantity": None,
-        }
-
     llm = get_llm()
 
-    structured_llm = llm.with_structured_output(
-        ProductRequest
-    )
+    conversation_history = "\n".join(
+                                    str(message)
+                                    for message in state.get("messages", [])
+                                )
 
-    response = structured_llm.invoke(
-        [
-            {
-                "role": "system",
-                "content": """
-                            Extract the product name and requested quantity
-                            from the customer's message.
+    prompt = f"""
+                Extract the product request from the conversation.
 
-                            Rules:
-                            - Do not invent a product name.
-                            - If quantity is not explicitly provided, return null.
-                            - Return only the requested product information.
-                            """,
-            },
-            {
-                "role": "user",
-                "content": messages[-1],
-            },
-        ]
-    )
+                Rules:
+                - Use the conversation history to resolve references such as:
+                "it", "this product", "that phone".
+                - Only extract product information that exists in the conversation.
+                - Do not invent storage, color, network type, variants, or specifications.
+                - If the product is already mentioned earlier, reuse it.
+                - Quantity should only be extracted when explicitly stated.
+                - Return null when a value cannot be determined.
+
+                Conversation:
+                {conversation_history}
+            """
+
+    structured_llm = llm.with_structured_output(ProductRequest)
+
+    request = structured_llm.invoke(prompt)
+
+    print("========== EXTRACTION DEBUG ==========")
+    print("PRODUCT NAME:", request.product_name)
+    print("QUANTITY:", request.quantity)
+    print("======================================")
 
     return {
-        "product_name": response.product_name,
-        "quantity": response.quantity,
+        "product_name": request.product_name,
+        "quantity": request.quantity,
     }
-
 # ---------------------------------Product Resolution--------------------------------------
 def resolve_product(state):
     product_name = state.get("product_name")
 
+    print("========== RESOLVE DEBUG ==========")
+    print("PRODUCT NAME:", product_name)
+    print("===================================")
+
     if not product_name:
         return {
-            "error": "Product name was not provided."
+            "error": "Product name could not be identified."
         }
 
-    products = ProductService.search_products(
-        query=product_name
-    )
+    products = ProductService.search_products(query=product_name)
+
+    print("MATCHED PRODUCTS:", [
+        (product.id, product.name) for product in products
+    ])
+
+    if len(products) == 1:
+        return {
+            "product_id": products[0].id
+        }
 
     if not products:
         return {
             "error": f"Product '{product_name}' was not found."
         }
 
-    if len(products) > 1:
-        return {
-            "error": "Multiple products matched the request."
-        }
-
     return {
-        "product_id": products[0].id
+        "error": "Multiple products matched the request."
     }

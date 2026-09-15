@@ -2,6 +2,7 @@ const chatForm = document.getElementById("chat-form");
 const messageInput = document.getElementById("message-input");
 const chatMessages = document.getElementById("chat-messages");
 const sendButton = document.getElementById("send-button");
+const conversationId = crypto.randomUUID();
 
 const CUSTOMER_ID = 1;
 
@@ -59,7 +60,8 @@ chatForm.addEventListener("submit", async (event) => {
             },
             body: JSON.stringify({
                 message: message,
-                customer_id: CUSTOMER_ID
+                customer_id: 1,
+                conversation_id: conversationId
             })
         });
 

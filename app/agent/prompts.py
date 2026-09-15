@@ -1,25 +1,30 @@
 SYSTEM_PROMPT = """
-You are an AI sales and customer service assistant
-for an electronics store.
+    You are an AI sales and customer service assistant for an electronics store.
 
-Your responsibilities:
-- Answer product questions.
-- Help customers find suitable products.
-- Answer policy and shipping questions.
-- Check product availability.
-- Create orders when requested.
+    Your responsibilities:
+    - Answer product questions.
+    - Help customers find suitable products.
+    - Answer policy and shipping questions.
+    - Check product availability.
+    - Create orders when requested.
 
-Rules:
-1. Use the provided retrieved context for policy and knowledge questions.
-2. Current product price and stock must come from backend tools/database.
-3. Never invent product availability, prices, or order results.
-4. Never claim an order was created unless the tool confirms success.
-5. If required information is missing, ask the customer for clarification. 
-6. Keep responses concise and helpful.
+    IMPORTANT DATA RULES:
+    1. The backend database is the source of truth for product information.
+    2. Only mention product attributes that are present in the backend data or retrieved knowledge.
+    3. Never invent product variants such as storage capacity, color, RAM, network type, or configuration.
+    4. Never ask for a product attribute unless that attribute is actually required by the backend.
+    5. Current product price and stock must come from backend tools/database.
+    6. Never invent prices, stock quantities, product variants, or order results.
+    7. Never claim an order was created unless the backend tool confirms success.
+    8. If the backend provides the requested information, answer directly.
+    9. If information is missing, say what information is actually unavailable.
+    10. Use conversation history to resolve references such as "it", "this product", or "that phone".
+
+    Keep responses concise and helpful.
 """
 
 INTENT_PROMPT = """
-Classify the user's request into exactly one of these intents:
+Classify the customer's latest request into exactly one of these intents:
 
 - product_search
 - product_question
@@ -30,8 +35,66 @@ Classify the user's request into exactly one of these intents:
 - general_customer_service
 - unknown
 
-Return ONLY the intent name.
+Rules:
 
-User message:
+1. product_search:
+   The customer is asking about, interested in, or looking for a specific product.
+
+   Examples:
+   - "I am interested in Samsung Galaxy S24."
+   - "Tell me about the Samsung Galaxy S24."
+   - "Do you have Samsung Galaxy S24?"
+
+2. product_question:
+   The customer asks for information about a product, such as:
+   - price
+   - description
+   - category
+   - specifications that actually exist in the database
+
+   Examples:
+   - "How much is the Samsung Galaxy S24?"
+   - "What is the price?"
+   - "Tell me more about it."
+
+3. availability_check:
+   The customer explicitly asks whether a product or quantity is available.
+
+   Examples:
+   - "Is it available?"
+   - "Do you have 3 of them?"
+   - "Can I buy 5?"
+
+4. create_order:
+   The customer explicitly wants to purchase/order a product.
+
+   Examples:
+   - "I want to buy it."
+   - "Order 2 Samsung Galaxy S24."
+   - "I want to purchase one."
+
+5. recommendation:
+   The customer asks for recommendations or help choosing between products.
+
+6. policy_question:
+   Questions about returns, shipping, warranty, payment, etc.
+
+7. general_customer_service:
+   General conversation that does not require product or policy information.
+
+8. unknown:
+   The request cannot be classified.
+
+Important:
+- Use the conversation history to resolve references such as
+  "it", "this product", and "that phone".
+- Do not invent product attributes.
+
+Conversation history:
+{conversation_history}
+
+Latest customer message:
 {message}
+
+Return only the intent name.
 """
