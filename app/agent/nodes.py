@@ -2,7 +2,7 @@ from app.config import Config
 from app.agent.llm import get_llm
 from app.agent.prompts import INTENT_PROMPT, SYSTEM_PROMPT
 from app.agent.tools import TOOLS
-from app.rag import EmbeddingService, ChromaVectorStore, KnowledgeRetriever
+from app.rag import get_embedding_service, ChromaVectorStore, KnowledgeRetriever
 
 from pydantic import BaseModel, Field
 from app.services import ProductService
@@ -134,9 +134,7 @@ def retrieve_context(state):
             "retrieved_context": []
         }
 
-    embedding_service = EmbeddingService(
-        Config.EMBEDDING_MODEL
-    )
+    embedding_service = get_embedding_service(Config.EMBEDDING_MODEL)
 
     vector_store = ChromaVectorStore(
         Config.CHROMA_PATH
