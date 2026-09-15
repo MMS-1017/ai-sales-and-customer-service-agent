@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Orders - Admin</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
+    >
+
+    <style>
+        .admin-page {
+            width: min(1200px, 95%);
+            margin: 30px auto;
+        }
+
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .admin-header a {
+            text-decoration: none;
+            color: #2563eb;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+
+        .data-table th {
+            background: #1f2937;
+            color: white;
+        }
+
+        .status {
+            padding: 5px 9px;
+            border-radius: 5px;
+            font-size: 13px;
+        }
+
+        .status-confirmed {
+            background: #dcfce7;
+        }
+
+        .status-pending {
+            background: #fef3c7;
+        }
+
+        .status-cancelled {
+            background: #fee2e2;
+        }
+
+        .empty {
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="admin-page">
+
+    <div class="admin-header">
+
+        <div>
+            <h1>Orders</h1>
+            <p>View customer orders and transaction details.</p>
+        </div>
+
+        <a href="{{ url_for('admin.dashboard') }}">
+            ← Dashboard
+        </a>
+
+    </div>
+
+
+    {% if orders %}
+
+    <table class="data-table">
+
+        <thead>
+            <tr>
+                <th>Order ID</th>
+                <th>Customer</th>
+                <th>Product</th>
+                <th>Quantity</th>
+                <th>Unit Price</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Created</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+        {% for order in orders %}
+
+            {% for item in order.items %}
+
+            <tr>
+
+                <td>#{{ order.id }}</td>
+
+                <td>
+                    {{ order.customer.name }}
+                    <br>
+                    <small>{{ order.customer.email }}</small>
+                </td>
+
+                <td>
+                    {{ item.product.name }}
+                </td>
+
+                <td>
+                    {{ item.quantity }}
+                </td>
+
+                <td>
+                    ${{ "%.2f"|format(item.unit_price) }}
+                </td>
+
+                <td>
+                    ${{ "%.2f"|format(order.total_price) }}
+                </td>
+
+                <td>
+
+                    <span class="status status-{{ order.status }}">
+                        {{ order.status|capitalize }}
+                    </span>
+
+                </td>
+
+                <td>
+                    {{ order.created_at.strftime("%Y-%m-%d %H:%M") }}
+                </td>
+
+            </tr>
+
+            {% endfor %}
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+
+    {% else %}
+
+        <div class="empty">
+            No orders found.
+        </div>
+
+    {% endif %}
+
+</div>
+
+</body>
+</html>

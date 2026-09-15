@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Customers - Admin</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
+    >
+
+    <style>
+        .admin-page {
+            width: min(1100px, 95%);
+            margin: 30px auto;
+        }
+
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .admin-header a {
+            text-decoration: none;
+            color: #2563eb;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+
+        .data-table th {
+            background: #1f2937;
+            color: white;
+        }
+
+        .empty {
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="admin-page">
+
+    <div class="admin-header">
+
+        <div>
+            <h1>Customers</h1>
+            <p>View registered customers and their orders.</p>
+        </div>
+
+        <a href="{{ url_for('admin.dashboard') }}">
+            ← Dashboard
+        </a>
+
+    </div>
+
+
+    {% if customers %}
+
+    <table class="data-table">
+
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Orders</th>
+                <th>Registered</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+        {% for customer in customers %}
+
+            <tr>
+
+                <td>
+                    {{ customer.id }}
+                </td>
+
+                <td>
+                    {{ customer.name }}
+                </td>
+
+                <td>
+                    {{ customer.email }}
+                </td>
+
+                <td>
+                    {{ customer.orders|length }}
+                </td>
+
+                <td>
+                    {{ customer.created_at.strftime("%Y-%m-%d %H:%M") }}
+                </td>
+
+            </tr>
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+
+    {% else %}
+
+        <div class="empty">
+            No customers found.
+        </div>
+
+    {% endif %}
+
+</div>
+
+</body>
+</html>

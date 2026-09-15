@@ -107,3 +107,37 @@ def deactivate_product(product_id):
     db.session.commit()
 
     return redirect(url_for("admin.products"))
+
+# =========================
+# Orders
+# =========================
+
+@admin_bp.get("/orders")
+def orders():
+    orders = (
+        Order.query
+        .order_by(Order.created_at.desc())
+        .all()
+    )
+
+    return render_template(
+        "orders.html",
+        orders=orders,
+    )
+    
+# =========================
+# Customers
+# =========================
+
+@admin_bp.get("/customers")
+def customers():
+    customers = (
+        Customer.query
+        .order_by(Customer.created_at.desc())
+        .all()
+    )
+
+    return render_template(
+        "customers.html",
+        customers=customers,
+    )
