@@ -60,13 +60,6 @@ def prepare_tool_input(state):
     quantity = state.get("quantity")
     customer_id = state.get("customer_id")
 
-    print("========== PREPARE TOOL DEBUG ==========")
-    print("TOOL:", tool_name)
-    print("PRODUCT ID:", product_id)
-    print("QUANTITY:", quantity)
-    print("CUSTOMER ID:", customer_id)
-    print("========================================")
-
     if not product_id:
         return {
             "tool_input": {},
