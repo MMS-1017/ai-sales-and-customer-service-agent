@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, redirect
 
 from app.config import Config
 from app.extensions import db
@@ -27,17 +27,13 @@ def create_app(test_config=None):
     with app.app_context():
         db.create_all()
 
+    @app.get("/")
+    def index():
+        return redirect("/chat")
+    
     @app.get("/health")
     def health():
         return {"status": "ok"}
 
-    @app.get("/db-test")
-    def db_test():
-        count = Product.query.count()
-
-        return {
-            "database": "connected",
-            "products_count": count,
-        }
 
     return app

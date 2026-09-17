@@ -6,6 +6,13 @@ def test_health_endpoint(client):
     assert response.get_json() == {"status": "ok"}
 
 
+def test_root_redirects_to_chat(client):
+    response = client.get("/")
+
+    assert response.status_code == 302
+    assert response.location.endswith("/chat")
+    
+
 def test_chat_rejects_empty_message(client):
     response = client.post(
         "/api/chat",
