@@ -7,8 +7,7 @@ from app.controllers.chat_controller import chat_bp
 from app.controllers.admin_controller import admin_bp
 
 
-def create_app():
-
+def create_app(test_config=None):
     app = Flask(
         __name__,
         template_folder="views/templates",
@@ -17,9 +16,12 @@ def create_app():
 
     app.config.from_object(Config)
 
+    if test_config:
+        app.config.update(test_config)
+
     app.register_blueprint(chat_bp)
     app.register_blueprint(admin_bp)
-    
+
     db.init_app(app)
 
     with app.app_context():
@@ -31,8 +33,6 @@ def create_app():
 
     @app.get("/db-test")
     def db_test():
-        from app.models import Product
-
         count = Product.query.count()
 
         return {
