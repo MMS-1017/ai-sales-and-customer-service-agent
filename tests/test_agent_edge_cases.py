@@ -1,4 +1,5 @@
 from app.agent.nodes import agent_decision, prepare_tool_input
+from app.agent.graph import route_after_resolve
 
 
 def test_create_order_without_quantity_returns_error():
@@ -28,7 +29,7 @@ def test_availability_without_quantity_returns_error():
 
 def test_missing_product_returns_error():
     state = {
-        "intent": "create_order",
+        "tool_name": "create_order",
         "product_id": None,
         "customer_id": 1,
         "quantity": 2,
@@ -58,3 +59,22 @@ def test_general_customer_service_does_not_call_business_tool():
     result = agent_decision(state)
 
     assert result["tool_name"] is None
+
+def test_resolve_product_error_routes_to_response():
+    state = {
+        "error": "Product could not be identified."
+    }
+
+    result = route_after_resolve(state)
+
+    assert result == "generate_response"
+
+
+def test_resolve_product_success_routes_to_tool_input():
+    state = {
+        "product_id": 1,
+    }
+
+    result = route_after_resolve(state)
+
+    assert result == "prepare_tool_input"

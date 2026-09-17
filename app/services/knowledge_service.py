@@ -41,19 +41,12 @@ class KnowledgeService:
         category = category.strip()
 
         if not title:
-            return {
-                "success": False,
-                "error": "Title is required.",
-            }
+            return {"success": False, "error": "Title is required."}
 
         if not content:
-            return {
-                "success": False,
-                "error": "Content is required.",
-            }
+            return {"success": False, "error": "Content is required."}
 
         try:
-
             document = KnowledgeDocument(
                 title=title,
                 content=content,
@@ -62,11 +55,16 @@ class KnowledgeService:
             )
 
             db.session.add(document)
-            db.session.commit()
 
-            ingestion_service = (KnowledgeService._get_ingestion_service())
+            # Flush assigns the database ID without committing.
+            db.session.flush()
+
+            ingestion_service = KnowledgeService._get_ingestion_service()
 
             chunks = ingestion_service.ingest_document(document)
+
+            # Commit only after vector ingestion succeeds.
+            db.session.commit()
 
             return {
                 "success": True,
@@ -75,7 +73,6 @@ class KnowledgeService:
             }
 
         except Exception:
-
             db.session.rollback()
 
             return {

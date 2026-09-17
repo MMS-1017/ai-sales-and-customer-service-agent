@@ -306,10 +306,6 @@ def extract_product_request(state):
 def resolve_product(state):
     product_name = state.get("product_name")
 
-    print("========== RESOLVE DEBUG ==========")
-    print("PRODUCT NAME:", product_name)
-    print("===================================")
-
     if not product_name:
         return {
             "error": "Product name could not be identified."
