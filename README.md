@@ -4,8 +4,6 @@ An AI-powered **Sales & Customer Service Agent for an electronics e-commerce sto
 
 The project is designed as a **modular monolith using MVC + Service + Agent + RAG layers**. The architecture keeps business logic outside Flask controllers, prevents the LLM from directly accessing the database, and separates authoritative transactional data from retrieval-oriented knowledge.
 
-> **Assessment focus:** agent architecture, meaningful LangGraph usage, RAG, real database-backed function calling, Flask/backend architecture, ORM/database design, dashboard functionality, error handling, documentation, and the ability to explain and modify the implementation.
-
 ---
 
 ## Table of Contents
@@ -40,13 +38,11 @@ The project is designed as a **modular monolith using MVC + Service + Agent + RA
 - [28. End-to-End Demo](#28-end-to-end-demo)
 - [29. RAG Update Demonstration](#29-rag-update-demonstration)
 - [30. Failure Scenarios](#30-failure-scenarios)
-- [31. Assessment Requirements Traceability](#31-assessment-requirements-traceability)
-- [32. Design Decisions](#32-design-decisions)
-- [33. Limitations](#33-limitations)
-- [34. Future Improvements](#34-future-improvements)
-- [35. Production Considerations](#35-production-considerations)
-- [36. Development Workflow](#36-development-workflow)
-- [37. Definition of Done](#37-definition-of-done)
+- [31. Design Decisions](#31-design-decisions)
+- [32. Limitations](#32-limitations)
+- [33. Future Improvements](#33-future-improvements)
+- [34. Production Considerations](#34-production-considerations)
+- [35. Development Workflow](#35-development-workflow)
 
 ---
 
@@ -373,7 +369,6 @@ ai-sales-agent/
 │   │
 │   ├── views/
 │   │   ├── templates/
-│   │   │   ├── base.html
 │   │   │   ├── chat.html
 │   │   │   ├── dashboard.html
 │   │   │   ├── products.html
@@ -390,11 +385,13 @@ ai-sales-agent/
 │   ├── controllers/
 │   │   ├── __init__.py
 │   │   ├── chat_controller.py
-│   │   └── admin_controller.py
+│   │   ├── admin_controller.py
+│   │   └── facebook_controller.py
 │   │
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── product_service.py
+│   │   ├── conversation_service.py
 │   │   ├── order_service.py
 │   │   └── knowledge_service.py
 │   │
@@ -403,7 +400,7 @@ ai-sales-agent/
 │   │   ├── state.py
 │   │   ├── graph.py
 │   │   ├── nodes.py
-│   │   ├── router.py
+│   │   ├── llm.py
 │   │   ├── prompts.py
 │   │   └── tools.py
 │   │
@@ -416,13 +413,17 @@ ai-sales-agent/
 │
 ├── tests/
 │   ├── conftest.py
-│   ├── test_models.py
-│   ├── test_products.py
-│   ├── test_orders.py
-│   ├── test_rag.py
-│   ├── test_tools.py
-│   ├── test_agent.py
-│   └── test_controllers.py
+│   ├── test_admin_controller.py
+│   ├── test_admin_crud.py
+│   ├── test_agent_edge_cases.py
+│   ├── test_agent_nodes.py
+│   ├── test_agent_routing.py
+│   ├── test_controllers.py
+│   ├── test_integration_order_flow.py
+│   ├── test_knowledge_consistency.py
+│   ├── test_knowledge_service.py
+│   ├── test_order_service.py
+│   └── test_product_service.py
 │
 ├── scripts/
 │   ├── seed.py
@@ -1277,8 +1278,6 @@ KnowledgeService
       +--> ChromaDB synchronization
 ```
 
-This is one of the key assessment demonstrations.
-
 ---
 
 # 17. Prompt and Grounding Rules
@@ -1433,7 +1432,7 @@ Do not allow the LLM to execute arbitrary Python.
 
 ## Admin Authentication
 
-For the assessment, basic admin routes may remain unauthenticated to keep scope manageable.
+For development, basic admin routes may remain unauthenticated to keep scope manageable.
 
 For production, authentication and authorization should be added.
 
@@ -1935,8 +1934,6 @@ The order must be visible in the admin dashboard.
 
 # 28. End-to-End Demo
 
-The recommended assessment demonstration is:
-
 ## Step 1 — Start the Application
 
 ```bash
@@ -2069,8 +2066,6 @@ Expected behavior:
 ---
 
 # 29. RAG Update Demonstration
-
-This is one of the most important demonstrations because the assessment requires knowledge add/update/delete operations to be reflected in retrieval.
 
 ## Initial State
 
@@ -2230,41 +2225,9 @@ Use rebuild_vector_store.py as the recovery path.
 
 ---
 
-# 31. Assessment Requirements Traceability
-
-| Assessment Requirement | Implementation |
-|---|---|
-| Customer service | LangGraph Agent + RAG + conversation context |
-| Sales | Grounded product lookup and real order flow |
-| Product questions | Product database + RAG |
-| Current prices | PostgreSQL |
-| Conversation context | Per-conversation in-memory history keyed by conversation ID |
-| RAG | `app/rag/` + ChromaDB + embeddings |
-| Add knowledge | Knowledge CRUD + vector synchronization |
-| Update knowledge | Delete old vectors + insert updated vectors |
-| Delete knowledge | Delete document vectors |
-| Meaningful LangGraph | Intent → routing → retrieval/tool → response |
-| Function calling | Availability and order tools |
-| Real business action | `create_order` writes to PostgreSQL |
-| Flask backend | Flask application factory + controllers |
-| ORM | SQLAlchemy |
-| Relational database | PostgreSQL |
-| Dashboard | Flask + Jinja2 |
-| Business data management | Products, orders, customers |
-| RAG management | Knowledge CRUD |
-| Error handling | Service/agent/controller error handling |
-| Documentation | This README |
-| Testing | pytest unit/integration tests |
-| Docker | Dockerfile + Docker Compose |
-| Meta Messenger | Optional future/bonus integration |
-
----
-
-# 32. Design Decisions
+# 31. Design Decisions
 
 ## Why a Modular Monolith?
-
-The assessment does not require distributed architecture.
 
 A modular monolith provides:
 
@@ -2273,7 +2236,6 @@ A modular monolith provides:
 - Easier local setup.
 - Clear module boundaries.
 - Lower operational complexity.
-- Better suitability for a junior-level technical assessment.
 
 There is no need for:
 
@@ -2282,8 +2244,6 @@ There is no need for:
 - Redis.
 - Microservices.
 - React.
-
-unless the project requirements change.
 
 ---
 
@@ -2428,11 +2388,8 @@ The LLM cannot bypass:
 
 # 33. Limitations
 
-This implementation is intentionally scoped for the assessment.
 
 ## Authentication
-
-The admin dashboard may be unauthenticated during assessment development.
 
 Production deployment should add:
 
@@ -2459,8 +2416,6 @@ More advanced systems could add:
 
 ## Local Vector Database
 
-ChromaDB is suitable for this assessment and local deployment.
-
 A production system may use a managed/distributed vector database depending on scale.
 
 ## No Distributed Architecture
@@ -2474,43 +2429,9 @@ It does not attempt to solve:
 - Horizontal event-driven processing.
 - Large-scale service decomposition.
 
-These are outside the core assessment scope.
-
 ## Admin Authentication
 
 Authentication is intentionally kept out of the mandatory scope so that effort can focus on the required AI/agent/RAG/backend functionality.
-
-## Messenger Integration
-
-Meta Messenger is not part of the mandatory implementation and should only be added after the core system is stable.
-
----
-
-# 34. Future Improvements
-
-Potential improvements include:
-
-## Meta Messenger
-
-```text
-Customer
-   |
-Messenger
-   |
-Meta Webhook
-   |
-Flask Controller
-   |
-LangGraph Agent
-   |
-RAG / Tools
-   |
-Response
-   |
-Messenger
-```
-
-The same Agent and Service layers should be reused.
 
 ## Authentication
 
@@ -2541,22 +2462,6 @@ Introduce:
 - Groundedness.
 - Tool success rate.
 - End-to-end task completion rate.
-
-## Observability
-
-Add:
-
-- Structured logs.
-- Tracing.
-- Agent execution metrics.
-- Tool latency.
-- Retrieval latency.
-- LLM latency.
-- Error-rate monitoring.
-
-## Production Vector Store
-
-Replace local ChromaDB with a production-ready vector infrastructure if scale requires it.
 
 ---
 
@@ -2608,191 +2513,3 @@ If traffic grows significantly, components can later be separated into services.
 The current modular boundaries make that transition easier because business logic is already separated from controllers and the agent.
 
 ---
-
-# 36. Development Workflow
-
-The project should be developed incrementally.
-
-Recommended implementation order:
-
-```text
-Phase 1  - Foundation
-Phase 2  - Database Models
-Phase 3  - Services
-Phase 4  - RAG
-Phase 5  - LangGraph Agent
-Phase 6  - Tools
-Phase 7  - Chat UI/API
-Phase 8  - Admin Dashboard
-Phase 9  - Integration
-Phase 10 - Testing & Hardening
-Phase 11 - Documentation
-Phase 12 - Optional Meta Messenger
-```
-
-## Phase 1 — Foundation
-
-- Repository structure.
-- Configuration.
-- Flask application factory.
-- Extensions.
-- PostgreSQL connection.
-- Docker Compose.
-- Health endpoint.
-
-## Phase 2 — Models
-
-- Customer.
-- Product.
-- Order.
-- OrderItem.
-- KnowledgeDocument.
-- Relationships.
-- Constraints.
-- Seed data.
-
-## Phase 3 — Services
-
-- ProductService.
-- OrderService.
-- KnowledgeService.
-- Unit tests.
-- Transaction tests.
-
-## Phase 4 — RAG
-
-- Embedding adapter.
-- Chroma vector store.
-- Chunking.
-- Ingestion.
-- Retriever.
-- CRUD synchronization.
-- Rebuild script.
-
-## Phase 5 — Agent
-
-- State.
-- Prompts.
-- Intent schema.
-- Understanding node.
-- Routing.
-- Retrieval.
-- Response generation.
-- Error paths.
-
-## Phase 6 — Tools
-
-- Availability tool.
-- Order tool.
-- Pydantic schemas.
-- Service integration.
-
-## Phase 7 — Chat
-
-- Chat controller.
-- Chat view.
-- API endpoint.
-- Conversation ID.
-- Conversation state.
-
-## Phase 8 — Dashboard
-
-- Dashboard.
-- Product management.
-- Orders.
-- Customers.
-- Knowledge CRUD.
-- RAG synchronization feedback.
-
-## Phase 9 — Integration
-
-Verify:
-
-```text
-Chat -> Agent -> RAG
-Chat -> Agent -> Tool -> Database
-Admin -> Knowledge -> RAG
-Admin -> Orders
-```
-
-## Phase 10 — Testing & Hardening
-
-- Full test suite.
-- Edge cases.
-- Failure scenarios.
-- Clean environment test.
-- Docker test.
-
-## Phase 11 — Documentation
-
-Update:
-
-- Architecture.
-- ERD.
-- LangGraph workflow.
-- RAG workflow.
-- Installation.
-- Examples.
-- Limitations.
-
-## Phase 12 — Bonus
-
-Only after all mandatory requirements work:
-
-```text
-Meta Messenger integration
-```
-
----
-
-# 37. Definition of Done
-
-The project is considered complete only when a clean environment can perform the following:
-
-```text
-1. Start PostgreSQL.
-2. Start Flask.
-3. Seed the database.
-4. Open the chat.
-5. Ask a policy question.
-6. Retrieve the answer through RAG.
-7. Ask a product question.
-8. Use current product information.
-9. Check product stock.
-10. Create a real order through a tool.
-11. See the created order in the admin dashboard.
-12. Edit a knowledge document.
-13. Ask the same knowledge question again.
-14. Verify that updated content is retrieved.
-15. Delete a knowledge document.
-16. Verify that deleted content is no longer retrieved.
-17. Test insufficient stock.
-18. Verify that failed orders do not corrupt stock.
-19. Run the test suite successfully.
-20. Run the application through Docker.
-21. Follow the README from a clean environment.
-```
-
----
-
-# Assessment Alignment
-
-The implementation is designed specifically around the core assessment expectations:
-
-- **Agent Architecture:** explicit LangGraph workflow.
-- **LangGraph:** meaningful multi-node orchestration.
-- **RAG:** embeddings, ChromaDB, retrieval, CRUD synchronization.
-- **Function Calling:** real DB-backed business action.
-- **Backend:** Flask application factory and Controllers.
-- **Database:** PostgreSQL + SQLAlchemy ORM.
-- **Dashboard:** Flask + Jinja2.
-- **Code Quality:** layered modular architecture.
-- **Error Handling:** controlled failures and transaction safety.
-- **Documentation:** architecture, setup, examples, and limitations.
-- **Understanding:** every major layer has a clear responsibility and can be explained independently.
-
----
-
-## License
-
-This project is intended as a technical-assessment/demo application. Add an appropriate license if the repository will be publicly distributed.
