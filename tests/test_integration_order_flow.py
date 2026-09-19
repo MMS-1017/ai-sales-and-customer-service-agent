@@ -4,7 +4,7 @@ from app.models import Customer, Product, Order
 from decimal import Decimal
 
 
-def test_customer_conversation_creates_real_order(app):
+def test_customer_conversation_creates_real_order(app, mock_llm):
     with app.app_context():
         graph = build_graph()
 

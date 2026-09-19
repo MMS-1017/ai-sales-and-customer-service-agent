@@ -31,7 +31,7 @@ def test_chat_rejects_missing_message(client):
     assert response.status_code == 400
 
 
-def test_chat_accepts_valid_message(client):
+def test_chat_accepts_valid_message(client, mock_llm):
     response = client.post(
         "/api/chat",
         json={

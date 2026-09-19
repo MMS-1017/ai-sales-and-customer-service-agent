@@ -57,7 +57,6 @@ This project implements an AI sales and customer-service assistant for an electr
 The assistant can:
 
 - Answer product questions.
-- Recommend products based on customer requirements.
 - Answer policy, FAQ, shipping, warranty, and payment questions using RAG.
 - Check real product availability from PostgreSQL.
 - Create real orders through a database-backed tool.
@@ -112,7 +111,7 @@ Examples:
 
 > I'm looking for a laptop for development.
 
-Recommendations use the product database for current transactional facts such as price and stock, while RAG can provide descriptive knowledge and policies.
+The current implementation focuses on grounded product lookup, availability, and ordering. A dedicated recommendation engine is outside the current mandatory scope.
 
 ### Business Actions
 
@@ -142,7 +141,6 @@ Availability and order creation are handled through application tools backed by 
 
 - Product search.
 - Product questions.
-- Product recommendations.
 - Current price lookup.
 - Current stock lookup.
 
@@ -162,7 +160,6 @@ Availability and order creation are handled through application tools backed by 
 - Embedding generation.
 - ChromaDB vector storage.
 - Similarity retrieval.
-- Metadata filtering.
 - Add/update/delete synchronization.
 - Vector-store rebuild script.
 - Controlled response when relevant knowledge is unavailable.
@@ -171,7 +168,6 @@ Availability and order creation are handled through application tools backed by 
 
 - Product availability check.
 - Real order creation.
-- Optional product search tool.
 
 ## Admin Dashboard
 
@@ -791,7 +787,7 @@ Stable IDs make update and delete operations reliable.
 
 Knowledge CRUD is a mandatory feature.
 
-The database and vector index must stay synchronized.
+Knowledge changes trigger vector-index synchronization. Because PostgreSQL and Chroma are separate systems, synchronization is not a distributed transaction; a rebuild script is provided as the recovery path.
 
 ## Create
 
@@ -818,20 +814,20 @@ Admin Controller
       v
 KnowledgeService.update_document()
       |
-      +--> PostgreSQL UPDATE
-      |
-      +--> Delete old Chroma chunks
+      +--> Update ORM object
       |
       +--> Chunk new content
       |
       +--> Generate embeddings
       |
-      +--> Chroma ADD
+      +--> Chroma UPSERT new chunks
+      |
+      +--> Delete obsolete old chunks
+      |
+      +--> PostgreSQL COMMIT
 ```
 
-The old vectors must be removed.
-
-Otherwise, the retriever could return stale information.
+Updated chunks use deterministic IDs. New content is indexed before obsolete chunks are removed, reducing the risk of an empty retrieval state during updates. PostgreSQL and Chroma are still separate systems, so `rebuild_vector_store.py` is the recovery path if a cross-system failure occurs.
 
 ## Delete
 
@@ -841,9 +837,9 @@ Admin Controller
       v
 KnowledgeService.delete_document()
       |
-      +--> PostgreSQL DELETE
-      |
       +--> Chroma DELETE all chunks for document
+      |
+      +--> PostgreSQL DELETE
 ```
 
 ## Rebuild
@@ -1159,9 +1155,7 @@ Conversation state must be scoped per conversation.
 
 Do not use a global Python variable for customer conversation state.
 
-A conversation ID can be associated with the LangGraph state/checkpoint mechanism.
-
-The system must ensure that one customer's conversation is never exposed to another customer.
+Conversation history is currently scoped by an application-level conversation ID and stored in the in-memory conversation service. It is not a LangGraph persistent checkpoint. Production deployment should move conversation state to a persistent store and associate it with an authenticated customer/session.
 
 ---
 
@@ -1389,7 +1383,7 @@ The application handles:
 
 API errors should return structured JSON.
 
-Dashboard errors should use Flask flash messages.
+Dashboard errors currently return controlled HTTP error responses. Production UI can use Flask flash messages for a more user-friendly experience.
 
 ---
 
@@ -1424,7 +1418,7 @@ Validate:
 - Product IDs.
 - Customer IDs.
 - Quantities.
-- Prices.
+- Prices and non-negative stock values.
 - Knowledge-document fields.
 
 ## No Arbitrary Code Execution
@@ -1973,16 +1967,6 @@ What is your return policy?
 
 Show that the answer is based on the knowledge base.
 
-## Step 4 — Demonstrate Recommendation
-
-Ask:
-
-```text
-I need a phone under $700 with a good camera.
-```
-
-Show that the recommendation uses current product data.
-
 ## Step 5 — Demonstrate Availability
 
 Ask:
@@ -2251,10 +2235,10 @@ Use rebuild_vector_store.py as the recovery path.
 | Assessment Requirement | Implementation |
 |---|---|
 | Customer service | LangGraph Agent + RAG + conversation context |
-| Sales | Product search/recommendation |
+| Sales | Grounded product lookup and real order flow |
 | Product questions | Product database + RAG |
 | Current prices | PostgreSQL |
-| Conversation context | Per-conversation agent state/checkpointing |
+| Conversation context | Per-conversation in-memory history keyed by conversation ID |
 | RAG | `app/rag/` + ChromaDB + embeddings |
 | Add knowledge | Knowledge CRUD + vector synchronization |
 | Update knowledge | Delete old vectors + insert updated vectors |
@@ -2471,7 +2455,6 @@ More advanced systems could add:
 - Hybrid search.
 - Query expansion.
 - HyDE.
-- Metadata-aware retrieval.
 - Retrieval evaluation.
 
 ## Local Vector Database
@@ -2545,7 +2528,6 @@ Add:
 - Hybrid search.
 - Reranking.
 - Query rewriting.
-- Metadata filtering.
 - Retrieval evaluation.
 - Better chunking strategies.
 
@@ -2774,7 +2756,7 @@ The project is considered complete only when a clean environment can perform the
 4. Open the chat.
 5. Ask a policy question.
 6. Retrieve the answer through RAG.
-7. Ask for a product recommendation.
+7. Ask a product question.
 8. Use current product information.
 9. Check product stock.
 10. Create a real order through a tool.

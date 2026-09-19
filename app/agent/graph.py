@@ -26,6 +26,13 @@ def route_after_resolve(state):
     return "prepare_tool_input"
 
 
+
+def route_after_prepare(state):
+    if state.get("error"):
+        return "generate_response"
+
+    return "execute_tool"
+
 def build_graph():
     graph = StateGraph(AgentState)
 
@@ -64,7 +71,14 @@ def build_graph():
         },
     )
 
-    graph.add_edge("prepare_tool_input", "execute_tool")
+    graph.add_conditional_edges(
+        "prepare_tool_input",
+        route_after_prepare,
+        {
+            "execute_tool": "execute_tool",
+            "generate_response": "generate_response",
+        },
+    )
     graph.add_edge("execute_tool", "generate_response")
     graph.add_edge("generate_response", END)
 

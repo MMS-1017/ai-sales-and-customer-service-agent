@@ -9,7 +9,7 @@ def test_get_product_details(app):
         assert result["success"] is True
         assert result["product_id"] == 1
         assert result["product_name"] == "Samsung Galaxy S24"
-        assert result["price"] == 699.99
+        assert result["price"] == "$699.99"
         assert result["stock_quantity"] == 15
 
 

@@ -10,7 +10,7 @@ class ProductDetailsInput(BaseModel):
 
 class AvailabilityInput(BaseModel):
     product_id: int
-    quantity: int = Field(gt=0)
+    quantity: int = Field(default=1, gt=0)
 
 
 class CreateOrderInput(BaseModel):
@@ -25,7 +25,7 @@ def get_product_details(product_id: int):
     if not product:
         return {
             "success": False,
-            "error": "Product not found."
+            "error": "Product not found.",
         }
 
     return {
@@ -34,7 +34,7 @@ def get_product_details(product_id: int):
         "product_name": product.name,
         "description": product.description,
         "category": product.category,
-        "price": float(product.price),
+        "price": f"${product.price:.2f}",
         "stock_quantity": product.stock_quantity,
         "is_active": product.is_active,
     }

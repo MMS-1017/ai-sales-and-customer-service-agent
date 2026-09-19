@@ -55,3 +55,47 @@ def test_knowledge_create_update_delete(client, app):
         document = db.session.get(KnowledgeDocument, document_id)
 
         assert document is None
+
+def test_create_product_rejects_negative_values(client):
+    response = client.post(
+        "/admin/products/create",
+        data={
+            "name": "Invalid Product",
+            "description": "Invalid test product.",
+            "category": "Test",
+            "price": "-10",
+            "stock_quantity": "5",
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_create_product_rejects_invalid_numeric_values(client):
+    response = client.post(
+        "/admin/products/create",
+        data={
+            "name": "Invalid Product",
+            "description": "Invalid test product.",
+            "category": "Test",
+            "price": "abc",
+            "stock_quantity": "5",
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_edit_product_rejects_negative_stock(client, app):
+    response = client.post(
+        "/admin/products/1/edit",
+        data={
+            "name": "Samsung Galaxy S24",
+            "description": "Samsung Galaxy S24 smartphone.",
+            "category": "Smartphones",
+            "price": "699.99",
+            "stock_quantity": "-1",
+        },
+    )
+
+    assert response.status_code == 400

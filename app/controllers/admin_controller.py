@@ -1,3 +1,5 @@
+from decimal import Decimal, InvalidOperation
+
 from flask import Blueprint, render_template, request, redirect, url_for
 
 from app.extensions import db
@@ -45,12 +47,24 @@ def create_product():
         return "All fields are required.", 400
 
     try:
+        price_value = Decimal(price)
+        stock_value = int(stock_quantity)
+    except (InvalidOperation, ValueError):
+        return "Price must be a valid number and stock must be a valid integer.", 400
+
+    if price_value < 0:
+        return "Price cannot be negative.", 400
+
+    if stock_value < 0:
+        return "Stock quantity cannot be negative.", 400
+
+    try:
         product = Product(
             name=name,
             description=description,
             category=category,
-            price=price,
-            stock_quantity=int(stock_quantity),
+            price=price_value,
+            stock_quantity=stock_value,
             is_active=True,
         )
 
@@ -81,11 +95,23 @@ def edit_product(product_id):
         return "All fields are required.", 400
 
     try:
+        price_value = Decimal(price)
+        stock_value = int(stock_quantity)
+    except (InvalidOperation, ValueError):
+        return "Price must be a valid number and stock must be a valid integer.", 400
+
+    if price_value < 0:
+        return "Price cannot be negative.", 400
+
+    if stock_value < 0:
+        return "Stock quantity cannot be negative.", 400
+
+    try:
         product.name = name
         product.description = description
         product.category = category
-        product.price = price
-        product.stock_quantity = int(stock_quantity)
+        product.price = price_value
+        product.stock_quantity = stock_value
 
         db.session.commit()
 

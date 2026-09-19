@@ -63,27 +63,23 @@ def prepare_tool_input(state):
     if not product_id:
         return {
             "tool_input": {},
-            "error": "Product could not be identified."
+            "error": "Product could not be identified.",
         }
 
     if tool_name == "get_product_details":
         return {
             "tool_input": {
-                "product_id": product_id
+                "product_id": product_id,
             }
         }
 
     if tool_name == "check_product_availability":
-        if not quantity:
-            return {
-                "tool_input": {},
-                "error": "Please specify the quantity."
-            }
+        quantity = quantity or 1
 
         return {
             "tool_input": {
                 "product_id": product_id,
-                "quantity": quantity
+                "quantity": quantity,
             }
         }
 
@@ -91,14 +87,14 @@ def prepare_tool_input(state):
         if not quantity:
             return {
                 "tool_input": {},
-                "error": "Please specify the quantity."
+                "error": "Please specify the quantity.",
             }
 
         return {
             "tool_input": {
                 "customer_id": customer_id,
                 "product_id": product_id,
-                "quantity": quantity
+                "quantity": quantity,
             }
         }
 
@@ -163,75 +159,71 @@ def agent_decision(state):
     else:
         tool_name = None
 
-    print("========== AGENT DEBUG ==========")
-    print("INTENT:", intent)
-    print("PRODUCT:", state.get("product_name"))
-    print("PRODUCT ID:", state.get("product_id"))
-    print("TOOL:", tool_name)
-    print("=================================")
-
     return {"tool_name": tool_name}
 
 # ---------------------------------Generation Node--------------------------------------
 def generate_response(state):
-
-    llm = get_llm()
-
-    conversation_history = "\n".join(
-                                    str(message)
-                                    for message in state.get("messages", [])
-                                )
-
-    retrieved_context = state.get("retrieved_context", [])
-
+    messages = state.get("messages", [])
     tool_result = state.get("tool_result")
+    retrieved_context = state.get("retrieved_context", [])
+    error = state.get("error")
+
+    # Never ask the LLM to recover from a failed backend operation.
+    # A failed tool must result in a controlled response rather than
+    # a guessed price, stock value, order ID, or other business fact.
+    if error:
+        return {
+            "response": error,
+        }
+
+    if isinstance(tool_result, dict) and not tool_result.get("success", True):
+        tool_error = tool_result.get("error", "The requested operation could not be completed.")
+        return {
+            "response": f"I couldn't complete that request: {tool_error}",
+        }
+
+    context_text = "\n\n".join(
+        item["content"] for item in retrieved_context
+        if item.get("content")
+    )
+
+    tool_text = ""
+    if tool_result:
+        tool_text = f"""
+                    AUTHORITATIVE BACKEND TOOL RESULT:
+                    {tool_result}
+
+                    IMPORTANT:
+                    - Treat this backend result as the source of truth for current product price,
+                    stock, and order information.
+                    - Preserve numeric values exactly. Do not round, approximate, convert, or
+                    replace them with values from conversation history or general knowledge.
+                    - For product descriptions, use only the description returned by the tool.
+                    - Do not add product specifications from model knowledge.
+                    """
 
     prompt = f"""
-            {SYSTEM_PROMPT}
+                {SYSTEM_PROMPT}
 
-            Conversation history:
-            {conversation_history}
+                Retrieved knowledge:
+                {context_text or "No relevant knowledge retrieved."}
 
-            Current intent:
-            {state.get("intent", "unknown")}
+                {tool_text}
 
-            Retrieved knowledge:
-            {retrieved_context}
+                Conversation:
+                {messages}
 
-            Backend tool result:
-            {tool_result}
+                Generate the final response to the customer.
+            """
 
-            Answer the user's latest message.
+    response = get_llm().invoke(prompt)
 
-            The backend tool result has priority for:
-            - product price
-            - product stock
-            - product existence
-            - order status
-            - order details
-
-            If the backend tool result contains the requested information,
-            answer directly using that information.
-
-            Do not ask for additional product attributes unless they are
-            required by the actual backend data model.
-
-            Do not invent variants or configurations.
-
-            Latest user message:
-            {state["messages"][-1]}
-        """
-
-    result = llm.invoke(prompt)
-
-    return {"response": result.content}
+    return {
+        "response": response.content,
+    }
 
 # ---------------------------------Tool Execution Node--------------------------------------
 def execute_tool(state):
-    print("========== TOOL DEBUG ==========")
-    print("TOOL NAME:", state.get("tool_name"))
-    print("TOOL INPUT:", state.get("tool_input"))
-    print("================================")
 
     tool_name = state.get("tool_name")
     tool_input = state.get("tool_input")

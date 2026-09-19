@@ -1,4 +1,5 @@
 from app.agent.nodes import agent_decision
+from app.agent.graph import route_after_prepare
 
 
 def test_product_question_routes_to_product_details():
@@ -59,3 +60,22 @@ def test_general_customer_service_does_not_use_tool():
     result = agent_decision(state)
 
     assert result["tool_name"] is None
+
+def test_prepare_tool_error_routes_to_response():
+    state = {
+        "error": "Product could not be identified.",
+    }
+
+    result = route_after_prepare(state)
+
+    assert result == "generate_response"
+
+
+def test_prepare_tool_success_routes_to_execution():
+    state = {
+        "tool_input": {"product_id": 1},
+    }
+
+    result = route_after_prepare(state)
+
+    assert result == "execute_tool"

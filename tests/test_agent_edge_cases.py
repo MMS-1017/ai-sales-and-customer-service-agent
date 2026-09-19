@@ -15,7 +15,7 @@ def test_create_order_without_quantity_returns_error():
     assert result["error"] == "Please specify the quantity."
 
 
-def test_availability_without_quantity_returns_error():
+def test_availability_without_quantity_defaults_to_one():
     state = {
         "tool_name": "check_product_availability",
         "product_id": 1,
@@ -24,7 +24,11 @@ def test_availability_without_quantity_returns_error():
 
     result = prepare_tool_input(state)
 
-    assert result["error"] == "Please specify the quantity."
+    assert result["tool_input"] == {
+        "product_id": 1,
+        "quantity": 1,
+    }
+    assert "error" not in result
 
 
 def test_missing_product_returns_error():
