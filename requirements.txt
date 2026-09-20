@@ -8,6 +8,7 @@ psycopg[binary]==3.2.10
 
 # Configuration
 python-dotenv==1.2.3
+requests==2.32.5
 
 # LLM / Agent Framework
 langchain==1.4.0

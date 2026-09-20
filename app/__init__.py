@@ -5,6 +5,7 @@ from app.extensions import db
 from app.models import Customer, Product, Order, OrderItem, KnowledgeDocument
 from app.controllers.chat_controller import chat_bp
 from app.controllers.admin_controller import admin_bp
+from app.controllers.facebook_controller import facebook_bp
 
 
 def create_app(test_config=None):
@@ -21,6 +22,7 @@ def create_app(test_config=None):
 
     app.register_blueprint(chat_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(facebook_bp)
 
     db.init_app(app)
 
