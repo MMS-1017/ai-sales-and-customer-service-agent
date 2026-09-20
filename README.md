@@ -1,366 +1,145 @@
 # AI Sales & Customer Service Agent
 
-An AI-powered **Sales & Customer Service Agent for an electronics e-commerce store**, built with Flask, PostgreSQL, SQLAlchemy, LangGraph, RAG, ChromaDB, and an LLM.
+An AI-powered sales and customer service assistant for an electronics e-commerce store, built with **Flask**, **PostgreSQL**, **LangGraph**, **RAG (ChromaDB)**, and **Groq LLM**.
 
-The project is designed as a **modular monolith using MVC + Service + Agent + RAG layers**. The architecture keeps business logic outside Flask controllers, prevents the LLM from directly accessing the database, and separates authoritative transactional data from retrieval-oriented knowledge.
+> **Architecture:** Modular monolith using MVC + Service + Agent + RAG layers. Business logic is kept out of controllers, the LLM never touches the database directly, and transactional data is strictly separated from retrieval knowledge.
 
 ---
 
 ## Table of Contents
 
-- [1. Project Overview](#1-project-overview)
-- [2. Business Domain](#2-business-domain)
-- [3. Core Features](#3-core-features)
-- [4. Architecture](#4-architecture)
-- [5. MVC and Supporting Layers](#5-mvc-and-supporting-layers)
-- [6. Repository Structure](#6-repository-structure)
-- [7. Database Design](#7-database-design)
-- [8. Data Authority](#8-data-authority)
-- [9. RAG Architecture](#9-rag-architecture)
-- [10. RAG CRUD Synchronization](#10-rag-crud-synchronization)
-- [11. LangGraph Agent](#11-langgraph-agent)
-- [12. Agent State](#12-agent-state)
-- [13. Tools and Function Calling](#13-tools-and-function-calling)
-- [14. Conversation Context](#14-conversation-context)
-- [15. Flask API and Controllers](#15-flask-api-and-controllers)
-- [16. Admin Dashboard](#16-admin-dashboard)
-- [17. Prompt and Grounding Rules](#17-prompt-and-grounding-rules)
-- [18. Error Handling](#18-error-handling)
-- [19. Security](#19-security)
-- [20. Technology Stack](#20-technology-stack)
-- [21. Environment Variables](#21-environment-variables)
-- [22. Local Installation](#22-local-installation)
-- [23. Database Setup and Seed Data](#23-database-setup-and-seed-data)
-- [24. Running the Application](#24-running-the-application)
-- [25. Docker](#25-docker)
-- [26. Testing](#26-testing)
-- [27. Example Conversations](#27-example-conversations)
-- [28. End-to-End Demo](#28-end-to-end-demo)
-- [29. RAG Update Demonstration](#29-rag-update-demonstration)
-- [30. Failure Scenarios](#30-failure-scenarios)
-- [31. Design Decisions](#31-design-decisions)
-- [32. Limitations](#32-limitations)
-- [33. Future Improvements](#33-future-improvements)
-- [34. Production Considerations](#34-production-considerations)
-- [35. Development Workflow](#35-development-workflow)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Database Design](#database-design)
+- [LangGraph Agent](#langgraph-agent)
+- [RAG Pipeline](#rag-pipeline)
+- [API Reference](#api-reference)
+- [Admin Dashboard](#admin-dashboard)
+- [Environment Variables](#environment-variables)
+- [Quick Start](#quick-start)
+- [Docker](#docker)
+- [Testing](#testing)
+- [Example Conversations](#example-conversations)
+- [Design Decisions](#design-decisions)
+- [Limitations & Future Work](#limitations--future-work)
 
 ---
 
-# 1. Project Overview
+## Features
 
-This project implements an AI sales and customer-service assistant for an electronics store.
-
-The assistant can:
-
-- Answer product questions.
-- Answer policy, FAQ, shipping, warranty, and payment questions using RAG.
-- Check real product availability from PostgreSQL.
-- Create real orders through a database-backed tool.
-- Maintain conversation context across multiple turns.
-- Provide controlled responses when information is unavailable.
-- Handle insufficient stock and other business failures safely.
-- Allow administrators to manage products, orders, customers, and knowledge documents through a Flask/Jinja2 dashboard.
-- Keep the Chroma retrieval index synchronized with knowledge-document CRUD operations.
-
-The project deliberately avoids unnecessary distributed infrastructure. It is implemented as a **modular monolith**, making the system easier to understand, test, demonstrate, and defend during a technical interview.
+| Category | Capabilities |
+|---|---|
+| **AI Agent** | Intent classification · Multi-step routing · RAG retrieval · Tool execution · Grounded response generation · Multi-turn conversation · Pronoun resolution |
+| **Sales** | Product search (exact + fuzzy) · Best-sellers by category · Price & stock lookup (live from PostgreSQL) · Order creation |
+| **Customer Service** | Return / shipping / warranty / payment policies via RAG |
+| **RAG** | PostgreSQL-backed knowledge store · Deterministic chunking · ChromaDB vector index · CRUD synchronization |
+| **Admin Dashboard** | Product management · Order & customer views · Knowledge document CRUD with automatic RAG sync · Local-timezone timestamps |
+| **Facebook Messenger** | Webhook integration for Messenger-based conversations |
 
 ---
 
-# 2. Business Domain
+## Architecture
 
-## Electronics E-Commerce Store
-
-The selected business domain is an electronics e-commerce store.
-
-Example catalog:
-
-- Samsung Galaxy S24
-- iPhone 15
-- Google Pixel 8
-- MacBook Air M3
-
-The catalog is seed/demo data and is editable through the admin dashboard.
-
-### Main customer use cases
-
-### Customer Service
-
-Examples:
-
-> What is your return policy?
-
-> Do you offer installment payments?
-
-> How long does shipping take?
-
-> What is your warranty policy?
-
-These questions are primarily answered through the RAG knowledge base.
-
-### Sales
-
-Examples:
-
-> I need a phone under $700 with a good camera.
-
-> Which phone would you recommend?
-
-> I'm looking for a laptop for development.
-
-The current implementation focuses on grounded product lookup, availability, and ordering. A dedicated recommendation engine is outside the current mandatory scope.
-
-### Business Actions
-
-Examples:
-
-> Is the Samsung Galaxy S24 available?
-
-> I want to buy 2 Samsung Galaxy S24.
-
-Availability and order creation are handled through application tools backed by PostgreSQL.
-
----
-
-# 3. Core Features
-
-## AI Agent
-
-- Intent understanding.
-- Request routing.
-- RAG retrieval.
-- Tool selection/execution.
-- Grounded response generation.
-- Conversation context.
-- Controlled error handling.
-
-## Sales
-
-- Product search.
-- Product questions.
-- Current price lookup.
-- Current stock lookup.
-
-## Customer Service
-
-- Return policy.
-- Shipping policy.
-- Warranty information.
-- Payment methods.
-- FAQs.
-- General customer-service questions.
-
-## RAG
-
-- Knowledge-document storage in PostgreSQL.
-- Deterministic chunking.
-- Embedding generation.
-- ChromaDB vector storage.
-- Similarity retrieval.
-- Add/update/delete synchronization.
-- Vector-store rebuild script.
-- Controlled response when relevant knowledge is unavailable.
-
-## Business Tools
-
-- Product availability check.
-- Real order creation.
-
-## Admin Dashboard
-
-- Dashboard overview.
-- Product management.
-- Order viewing.
-- Customer viewing.
-- Knowledge-document CRUD.
-- RAG synchronization through the knowledge service.
-
----
-
-# 4. Architecture
-
-The application follows a modular-monolith architecture.
-
-```text
-                         CUSTOMER / ADMIN
-                                |
-                                v
-                  +---------------------------+
-                  |           VIEWS           |
-                  |     Jinja2 + HTML/CSS/JS |
-                  +-------------+-------------+
-                                |
-                                v
-                  +---------------------------+
-                  |       CONTROLLERS         |
-                  |       Flask Blueprints    |
-                  +-------------+-------------+
-                                |
-                    calls Services / Agent
-                                |
-             +------------------+------------------+
-             |                                     |
-             v                                     v
-   +----------------------+              +----------------------+
-   |       SERVICES      |              |     AGENT LAYER      |
-   |---------------------|              |----------------------|
-   | ProductService      |              | LangGraph            |
-   | OrderService        |              | State                |
-   | KnowledgeService    |              | Nodes                |
-   +----------+-----------+              | Routing              |
-              |                          | Tools                |
-              v                          +----------+-----------+
-   +----------------------+                         |
-   |        MODELS        |                         |
-   |     SQLAlchemy ORM   |                         |
-   +----------+-----------+                         |
-              |                          +----------+----------+
-              v                          |                     |
-      +---------------+                  v                     v
-      |  PostgreSQL   |           +-------------+       +------------+
-      | Source of     |           |     RAG     |       |    LLM     |
-      | Truth         |           | ChromaDB    |       |  Provider  |
-      +---------------+           +-------------+       +------------+
+```
+              CUSTOMER / ADMIN
+                     │
+                     ▼
+       ┌─────────────────────────┐
+       │         VIEWS           │  Jinja2 + HTML/CSS/JS
+       └────────────┬────────────┘
+                    │
+                    ▼
+       ┌─────────────────────────┐
+       │       CONTROLLERS       │  Flask Blueprints
+       └────────────┬────────────┘
+                    │
+          ┌─────────┴──────────┐
+          ▼                    ▼
+ ┌────────────────┐   ┌────────────────────┐
+ │    SERVICES    │   │    AGENT LAYER     │
+ │─────────────── │   │────────────────────│
+ │ ProductService │   │ LangGraph Graph    │
+ │ OrderService   │   │ Nodes & Routing    │
+ │ KnowledgeSvc   │   │ Tools              │
+ └───────┬────────┘   └────────┬───────────┘
+         │                     │
+         ▼              ┌──────┴──────┐
+ ┌──────────────┐       ▼            ▼
+ │    MODELS    │  ┌─────────┐  ┌─────────┐
+ │ SQLAlchemy   │  │   RAG   │  │   LLM   │
+ └──────┬───────┘  │ChromaDB │  │  Groq   │
+        │          └─────────┘  └─────────┘
+        ▼
+ ┌──────────────┐
+ │  PostgreSQL  │  ← Source of Truth
+ └──────────────┘
 ```
 
-## Request Flow
+### Agent Request Flow
 
-A typical customer request follows this flow:
-
-```text
-Customer
-   |
-   v
-Flask Controller
-   |
-   v
-LangGraph Agent
-   |
-   +--> Understand Request
-   |
-   +--> Route Request
-   |
-   +--> Retrieve RAG Context (if needed)
-   |
-   +--> Execute Business Tool (if needed)
-   |
-   +--> Generate Response
-   |
-   v
-Flask Controller
-   |
-   v
-Customer
+```
+Customer Message
+  → Flask Controller
+    → LangGraph Agent
+        1. understand_request     (intent classification with labeled history)
+        2. retrieve_context       (RAG, when relevant)
+        3. agent_decision         (route to tool or direct response)
+        4a. extract_product_request + resolve_product  (product intents — exact + fuzzy match)
+        4b. extract_category      (recommendation intent — extracts optional category)
+        5. prepare_tool_input
+        6. execute_tool           (PostgreSQL-backed business operation)
+        7. generate_response      (grounded LLM response with labeled conversation history)
+  → Customer
 ```
 
----
+### Layer Responsibilities
 
-# 5. MVC and Supporting Layers
-
-The project uses MVC as the presentation/application boundary, with dedicated Service, Agent, and RAG layers.
-
-This is intentional: putting all business logic into Flask controllers would make the system harder to test and violate separation of concerns.
-
-| Layer | Location | Responsibility |
+| Layer | Path | Responsibility |
 |---|---|---|
-| Model | `app/models/` | SQLAlchemy ORM entities |
-| View | `app/views/` | Jinja2 templates, CSS, JavaScript |
-| Controller | `app/controllers/` | Flask routes and request/response handling |
+| Model | `app/models/` | SQLAlchemy ORM entities & constraints |
+| View | `app/views/` | Jinja2 templates, CSS, JS |
+| Controller | `app/controllers/` | HTTP request/response only — no business logic |
 | Service | `app/services/` | Business rules, validation, transactions |
-| Agent | `app/agent/` | LangGraph orchestration and tools |
+| Agent | `app/agent/` | LangGraph orchestration, tools, prompts |
 | RAG | `app/rag/` | Embeddings, chunking, ChromaDB, retrieval |
 
-## Model
+---
 
-Models define:
+## Tech Stack
 
-- Tables.
-- Columns.
-- Relationships.
-- Database-level constraints.
-
-Models should not contain complex business rules.
-
-## View
-
-Views contain:
-
-- Jinja2 templates.
-- HTML.
-- CSS.
-- Minimal JavaScript.
-
-Views do not query the database directly.
-
-## Controller
-
-Controllers:
-
-1. Receive an HTTP request.
-2. Validate/parse request input at the interface boundary.
-3. Call a Service or the Agent.
-4. Return JSON or render a View.
-
-Controllers should not:
-
-- Query SQLAlchemy directly.
-- Call the LLM directly.
-- Call ChromaDB directly.
-- Implement order/business rules.
-
-## Service
-
-Services contain business logic.
-
-Examples:
-
-```text
-ProductService
-OrderService
-KnowledgeService
-```
-
-The Service layer is the main enforcement point for business rules.
-
-## Agent
-
-The Agent layer orchestrates:
-
-- Intent understanding.
-- Routing.
-- Retrieval.
-- Tool execution.
-- Response generation.
-- Conversation state.
-
-The Agent does not directly manipulate SQLAlchemy models.
-
-## RAG
-
-The RAG layer owns:
-
-- Text normalization.
-- Chunking.
-- Embeddings.
-- ChromaDB storage.
-- Retrieval.
-- Vector synchronization.
-
-RAG is not the source of truth for current stock or price.
+| Technology | Role |
+|---|---|
+| Python 3.11+ | Primary language |
+| Flask 3 | Web framework |
+| Flask-SQLAlchemy | ORM integration |
+| PostgreSQL | Relational source of truth |
+| LangGraph | Agent graph orchestration |
+| LangChain / langchain-groq | LLM & tool integrations |
+| Groq (`qwen/qwen3.8-27b`) | LLM provider |
+| ChromaDB | Local vector database |
+| Sentence Transformers (`all-MiniLM-L6-v2`) | Embedding model |
+| rapidfuzz | Fuzzy product name matching (typo tolerance) |
+| Pydantic | Structured output & validation |
+| Jinja2 | Server-side HTML templates |
+| pytest | Testing |
+| Docker / Docker Compose | Containerisation |
+| python-dotenv | Environment configuration |
 
 ---
 
-# 6. Repository Structure
+## Project Structure
 
-```text
-ai-sales-agent/
+```
+ai-sales-and-customer-service-agent/
 │
 ├── app/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── extensions.py
+│   ├── __init__.py           # App factory
+│   ├── config.py             # Config from environment
+│   ├── extensions.py         # SQLAlchemy instance
 │   │
-│   ├── models/
-│   │   ├── __init__.py
+│   ├── models/               # SQLAlchemy ORM models
 │   │   ├── customer.py
 │   │   ├── product.py
 │   │   ├── order.py
@@ -368,72 +147,42 @@ ai-sales-agent/
 │   │   └── knowledge.py
 │   │
 │   ├── views/
-│   │   ├── templates/
-│   │   │   ├── chat.html
-│   │   │   ├── dashboard.html
-│   │   │   ├── products.html
-│   │   │   ├── orders.html
-│   │   │   ├── customers.html
-│   │   │   └── knowledge.html
-│   │   │
-│   │   └── static/
-│   │       ├── css/
-│   │       │   └── style.css
-│   │       └── js/
-│   │           └── chat.js
+│   │   ├── templates/        # Jinja2 HTML templates
+│   │   └── static/           # CSS & JS
 │   │
 │   ├── controllers/
-│   │   ├── __init__.py
 │   │   ├── chat_controller.py
 │   │   ├── admin_controller.py
 │   │   └── facebook_controller.py
 │   │
 │   ├── services/
-│   │   ├── __init__.py
 │   │   ├── product_service.py
-│   │   ├── conversation_service.py
 │   │   ├── order_service.py
-│   │   └── knowledge_service.py
+│   │   ├── knowledge_service.py  # Keeps PostgreSQL + ChromaDB in sync
+│   │   ├── conversation_service.py
+│   │   └── facebook_service.py
 │   │
 │   ├── agent/
-│   │   ├── __init__.py
-│   │   ├── state.py
-│   │   ├── graph.py
-│   │   ├── nodes.py
-│   │   ├── llm.py
-│   │   ├── prompts.py
-│   │   └── tools.py
+│   │   ├── graph.py          # LangGraph graph definition
+│   │   ├── nodes.py          # All node functions
+│   │   ├── state.py          # AgentState TypedDict
+│   │   ├── tools.py          # StructuredTool definitions
+│   │   ├── prompts.py        # System & intent prompts
+│   │   └── llm.py            # Groq LLM factory
 │   │
 │   └── rag/
-│       ├── __init__.py
-│       ├── embeddings.py
-│       ├── ingestion.py
-│       ├── retriever.py
-│       └── vectorstore.py
+│       ├── embeddings.py     # SentenceTransformer wrapper
+│       ├── ingestion.py      # Chunking + embedding + indexing
+│       ├── retriever.py      # Similarity retrieval
+│       └── vectorstore.py    # ChromaDB client wrapper
 │
-├── tests/
-│   ├── conftest.py
-│   ├── test_admin_controller.py
-│   ├── test_admin_crud.py
-│   ├── test_agent_edge_cases.py
-│   ├── test_agent_nodes.py
-│   ├── test_agent_routing.py
-│   ├── test_controllers.py
-│   ├── test_integration_order_flow.py
-│   ├── test_knowledge_consistency.py
-│   ├── test_knowledge_service.py
-│   ├── test_order_service.py
-│   └── test_product_service.py
-│
+├── tests/                    # pytest test suite
 ├── scripts/
-│   ├── seed.py
-│   └── rebuild_vector_store.py
+│   └── seed.py               # Seed products, customers & knowledge docs
 │
-├── chroma_data/
+├── chroma_data/              # ChromaDB persistent storage
 ├── .env.example
-├── .gitignore
 ├── requirements.txt
-├── Dockerfile
 ├── docker-compose.yml
 ├── run.py
 └── README.md
@@ -441,2075 +190,645 @@ ai-sales-agent/
 
 ---
 
-# 7. Database Design
+## Database Design
 
-PostgreSQL is the authoritative relational database.
+### Entity Relationship
 
-## Entity Relationship Diagram
+```
+customers ──1──< orders ──1──< order_items >──1── products
 
-```text
-+-------------------+
-|    customers      |
-+-------------------+
-| id PK             |
-| name              |
-| email UNIQUE      |
-| created_at        |
-+---------+---------+
-          |
-          | 1
-          |
-          | N
-+---------v---------+
-|      orders       |
-+-------------------+
-| id PK             |
-| customer_id FK    |
-| status            |
-| total_price       |
-| created_at        |
-| updated_at        |
-+---------+---------+
-          |
-          | 1
-          |
-          | N
-+---------v---------+
-|    order_items    |
-+-------------------+
-| id PK             |
-| order_id FK       |
-| product_id FK     |
-| quantity          |
-| unit_price        |
-+---------+---------+
-          |
-          | N
-          |
-          | 1
-+---------v---------+
-|     products      |
-+-------------------+
-| id PK             |
-| name              |
-| description       |
-| price             |
-| category          |
-| stock_quantity    |
-| is_active         |
-| created_at        |
-| updated_at        |
-+-------------------+
-
-
-+---------------------------+
-|   knowledge_documents     |
-+---------------------------+
-| id PK                     |
-| title                     |
-| content                   |
-| category                  |
-| source                    |
-| created_at                |
-| updated_at                |
-+---------------------------+
-             |
-             | ingestion
-             v
-       +-------------+
-       |  ChromaDB   |
-       | Vector Index|
-       +-------------+
+knowledge_documents ──[ingestion]──> ChromaDB vector index
 ```
 
-## Customers
+### Tables
 
-Fields:
+#### `customers`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | Integer PK | |
+| `name` | String(120) | Required |
+| `email` | String(255) | Required, Unique |
+| `created_at` | DateTime(tz) | UTC |
 
-- `id`
-- `name`
-- `email`
-- `created_at`
+#### `products`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | Integer PK | |
+| `name` | String(200) | Required |
+| `description` | Text | Required |
+| `price` | Numeric(10,2) | Required, ≥ 0 |
+| `category` | String(100) | Required |
+| `stock_quantity` | Integer | Required, ≥ 0 |
+| `is_active` | Boolean | Default `True` |
+| `created_at` / `updated_at` | DateTime(tz) | UTC |
 
-Constraints:
+#### `orders`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | Integer PK | |
+| `customer_id` | FK → customers | Required |
+| `status` | String(20) | `pending` / `confirmed` / `cancelled` |
+| `total_price` | Numeric(10,2) | Required |
+| `created_at` / `updated_at` | DateTime(tz) | UTC |
 
-- Email is required.
-- Email is unique.
+#### `order_items`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | Integer PK | |
+| `order_id` | FK → orders | Required |
+| `product_id` | FK → products | Required |
+| `quantity` | Integer | Required |
+| `unit_price` | Numeric(10,2) | Price snapshot at time of order |
 
-Relationship:
+> **`unit_price` is a price snapshot** — historical orders remain correct even if the product price changes later.
 
-```text
-Customer 1 -> N Orders
-```
+#### `knowledge_documents`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | Integer PK | |
+| `title` | String(255) | Required |
+| `content` | Text | Required |
+| `category` | String(50) | e.g. `policy`, `shipping`, `warranty`, `payment` |
+| `source` | String(255) | Optional |
+| `created_at` / `updated_at` | DateTime(tz) | UTC |
 
-## Products
+### Data Authority
 
-Fields:
+| Source | Authoritative for |
+|---|---|
+| **PostgreSQL** | Current price, current stock, customers, orders, order status |
+| **ChromaDB (RAG)** | Return policies, shipping info, warranty, payment methods, FAQs |
 
-- `id`
-- `name`
-- `description`
-- `price`
-- `category`
-- `stock_quantity`
-- `is_active`
-- `created_at`
-- `updated_at`
-
-Constraints:
-
-- Name required.
-- Description required.
-- Category required.
-- Price must be non-negative.
-- Stock must be non-negative.
-
-## Orders
-
-Fields:
-
-- `id`
-- `customer_id`
-- `status`
-- `total_price`
-- `created_at`
-- `updated_at`
-
-Possible statuses:
-
-```text
-pending
-confirmed
-cancelled
-```
-
-## Order Items
-
-Fields:
-
-- `id`
-- `order_id`
-- `product_id`
-- `quantity`
-- `unit_price`
-
-`unit_price` is a **price snapshot**.
-
-This means an historical order remains correct even if the product price changes later.
-
-Example:
-
-```text
-Product price today: $649
-Old order unit_price: $699
-```
-
-The old order still records `$699`.
-
-## Knowledge Documents
-
-Fields:
-
-- `id`
-- `title`
-- `content`
-- `category`
-- `source`
-- `created_at`
-- `updated_at`
-
-Possible categories:
-
-```text
-product
-policy
-shipping
-warranty
-payment
-faq
-```
+> **Conflict rule:** When RAG and PostgreSQL disagree on price or stock, **PostgreSQL always wins.** The LLM is instructed never to use stale vectorised prices.
 
 ---
 
-# 8. Data Authority
+## LangGraph Agent
 
-One of the most important design decisions is separating authoritative transactional data from retrieval knowledge.
+### Graph Nodes
 
-## PostgreSQL is authoritative for
+| Node | Purpose |
+|---|---|
+| `understand_request` | Classifies intent into one of 8 categories using labeled conversation history |
+| `retrieve_context` | RAG retrieval (only for knowledge-based intents) |
+| `agent_decision` | Decides which tool to call (or goes straight to response) |
+| `extract_product_request` | Extracts product name & quantity using structured LLM output |
+| `extract_category` | Extracts optional category keyword for best-seller queries (e.g. "headphones") |
+| `resolve_product` | Two-stage match: exact SQL ILIKE → rapidfuzz fallback for typos/misspellings |
+| `prepare_tool_input` | Builds validated tool input dict |
+| `execute_tool` | Calls the selected StructuredTool |
+| `generate_response` | Produces final grounded customer response |
 
-- Current product price.
-- Current stock.
-- Customers.
-- Orders.
-- Order status.
+### Supported Intents
 
-## RAG is authoritative for
-
-- Return policies.
-- Shipping information.
-- Warranty information.
-- Payment methods.
-- FAQs.
-- Descriptive business knowledge.
-
-## Conflict Rule
-
-When retrieved text conflicts with PostgreSQL transactional data, PostgreSQL wins.
-
-Example:
-
-```text
-RAG:
-Samsung Galaxy S24 = $699
-
-PostgreSQL:
-Samsung Galaxy S24 = $649
+```
+product_search · product_question · recommendation
+policy_question · availability_check · create_order
+general_customer_service · unknown
 ```
 
-The assistant must answer:
-
-```text
-$649
-```
-
-It must not trust a stale vectorized price.
-
-This prevents an important class of RAG hallucination/staleness problems.
-
----
-
-# 9. RAG Architecture
-
-The RAG pipeline is:
-
-```text
-KnowledgeDocument
-       |
-       v
-PostgreSQL
-       |
-       v
-Normalize/Clean
-       |
-       v
-Chunk
-       |
-       v
-Embeddings
-       |
-       v
-ChromaDB
-       |
-       v
-Similarity Retrieval
-       |
-       v
-Relevant Context
-       |
-       v
-LLM
-       |
-       v
-Grounded Response
-```
-
-## Why PostgreSQL + ChromaDB?
-
-They have different responsibilities.
-
-### PostgreSQL
-
-Acts as the durable source of truth.
-
-### ChromaDB
-
-Acts as a retrieval index.
-
-If ChromaDB is deleted or becomes inconsistent, the vector store can be rebuilt from PostgreSQL.
-
----
-
-## Chunking
-
-The initial strategy uses deterministic chunks of approximately:
-
-```text
-500–800 characters/tokens
-```
-
-with approximately:
-
-```text
-50–100 overlap
-```
-
-The exact implementation should keep these values configurable.
-
-The objective is to preserve enough context inside each chunk while keeping retrieval focused.
-
----
-
-## Metadata
-
-Each vector contains metadata such as:
-
-```text
-document_id
-title
-category
-source
-```
-
-This allows retrieval results to be traced back to their source document.
-
----
-
-## Stable Chunk IDs
-
-Chunks use deterministic IDs:
-
-```text
-doc-{document_id}-chunk-{chunk_index}
-```
-
-Example:
-
-```text
-doc-4-chunk-0
-doc-4-chunk-1
-doc-4-chunk-2
-```
-
-Stable IDs make update and delete operations reliable.
-
----
-
-# 10. RAG CRUD Synchronization
-
-Knowledge CRUD is a mandatory feature.
-
-Knowledge changes trigger vector-index synchronization. Because PostgreSQL and Chroma are separate systems, synchronization is not a distributed transaction; a rebuild script is provided as the recovery path.
-
-## Create
-
-```text
-Admin Controller
-      |
-      v
-KnowledgeService.create_document()
-      |
-      +--> PostgreSQL INSERT
-      |
-      +--> Chunk document
-      |
-      +--> Generate embeddings
-      |
-      +--> Chroma ADD
-```
-
-## Update
-
-```text
-Admin Controller
-      |
-      v
-KnowledgeService.update_document()
-      |
-      +--> Update ORM object
-      |
-      +--> Chunk new content
-      |
-      +--> Generate embeddings
-      |
-      +--> Chroma UPSERT new chunks
-      |
-      +--> Delete obsolete old chunks
-      |
-      +--> PostgreSQL COMMIT
-```
-
-Updated chunks use deterministic IDs. New content is indexed before obsolete chunks are removed, reducing the risk of an empty retrieval state during updates. PostgreSQL and Chroma are still separate systems, so `rebuild_vector_store.py` is the recovery path if a cross-system failure occurs.
-
-## Delete
-
-```text
-Admin Controller
-      |
-      v
-KnowledgeService.delete_document()
-      |
-      +--> Chroma DELETE all chunks for document
-      |
-      +--> PostgreSQL DELETE
-```
-
-## Rebuild
-
-A recovery script is provided:
-
-```bash
-python scripts/rebuild_vector_store.py
-```
-
-The script:
-
-1. Clears/reinitializes the Chroma collection.
-2. Reads all knowledge documents from PostgreSQL.
-3. Chunks each document.
-4. Generates embeddings.
-5. Inserts the vectors into ChromaDB.
-
-This provides a recovery mechanism if the vector index becomes inconsistent.
-
-## Synchronization Failure
-
-If PostgreSQL succeeds but vector synchronization fails:
-
-- Do not silently claim success.
-- Log the technical error.
-- Surface a controlled admin error.
-- Tell the administrator that the vector store needs rebuilding.
-
----
-
-# 11. LangGraph Agent
-
-The application uses LangGraph for explicit multi-step agent orchestration.
-
-The graph is intentionally more than a single LLM call.
-
-## High-Level Workflow
-
-```text
-START
-  |
-  v
-understand_request
-  |
-  v
-route_request
-  |
-  +--------------------------+
-  |                          |
-  v                          v
-RAG path                 Tool path
-  |                          |
-  v                          v
-retrieve_context         execute_tool
-  |                          |
-  +------------+-------------+
-               |
-               v
-       generate_response
-               |
-               v
-              END
-```
-
-A more robust implementation can use an explicit decision node:
-
-```text
-START
-  |
-  v
-understand_request
-  |
-  v
-retrieve_context (when needed)
-  |
-  v
-agent_decision
-  |
-  +---- final answer ----> generate_response
-  |
-  +---- tool call -------> execute_tool
-                              |
-                              v
-                       generate_response
-                              |
-                              v
-                             END
-```
-
----
-
-# 12. Agent State
-
-The graph maintains structured state.
-
-Conceptually:
+### Agent State (`AgentState`)
 
 ```python
 class AgentState(TypedDict, total=False):
-    messages: list
-    intent: str
-    customer_id: int | None
-    retrieved_context: list
-    tool_name: str | None
+    messages: list          # Conversation history (alternating customer/agent)
+    intent: str             # Classified intent
+    customer_id: int | None # Current customer
+
+    retrieved_context: list # RAG results
+    product_name: str | None
+    category: str | None    # For best-seller / recommendation queries
+    quantity: int | None
+    product_id: int | None
+
+    tool_name: str | None   # Selected tool
+    tool_input: dict | None
     tool_result: dict | None
-    response: str | None
-    error: str | None
+
+    response: str | None    # Final response
+    error: str | None       # Controlled error state
 ```
 
-## State Fields
+### Tools
 
-### `messages`
-
-Conversation history.
-
-### `intent`
-
-Detected request type.
-
-Examples:
-
-```text
-product_search
-product_question
-recommendation
-policy_question
-availability_check
-create_order
-general_customer_service
-unknown
-```
-
-### `customer_id`
-
-Identifies the customer when a business action requires it.
-
-### `retrieved_context`
-
-RAG results supplied to the response-generation step.
-
-### `tool_name`
-
-The selected application tool.
-
-### `tool_result`
-
-Structured result returned from the tool.
-
-### `response`
-
-Final customer-facing response.
-
-### `error`
-
-Controlled internal error state.
-
----
-
-# 13. Tools and Function Calling
-
-The assistant uses tools for real business operations.
-
-The LLM does not directly execute SQL.
-
-Instead:
-
-```text
-LLM / Agent
-    |
-    v
-Tool
-    |
-    v
-Service
-    |
-    v
-SQLAlchemy
-    |
-    v
-PostgreSQL
-```
-
----
-
-## `check_product_availability`
-
-Input:
-
+#### `get_product_details`
 ```json
-{
-  "product_id": 1,
-  "quantity": 1
+// Input
+{ "product_id": 1 }
+
+// Output
+{ "success": true, "product_name": "Samsung Galaxy S24",
+  "price": "$699.99", "stock_quantity": 15, ... }
+```
+
+#### `check_product_availability`
+```json
+// Input
+{ "product_id": 1, "quantity": 2 }
+
+// Output
+{ "success": true, "in_stock": true,
+  "requested_quantity": 2, "available_quantity": 15 }
+```
+
+#### `create_order`
+```json
+// Input
+{ "customer_id": 1, "product_id": 1, "quantity": 2 }
+
+// Output (success)
+{ "success": true, "order_id": 42, "status": "confirmed",
+  "total_price": 1399.98, "remaining_stock": 13 }
+```
+
+`create_order` performs a full transactional sequence: validate customer → validate product → check stock → calculate total → create `Order` + `OrderItem` → decrement stock → `COMMIT`. A `ROLLBACK` is issued on any failure.
+
+#### `get_best_sellers`
+```json
+// Input
+{ "category": "headphones", "limit": 5 }   // category is optional
+
+// Output
+{ "success": true, "category_filter": "headphones",
+  "products": [
+    { "product_name": "Samsung Earbuds 4 Pro", "price": "$379.99",
+      "stock_quantity": 10, "units_sold": 5 },
+    ...
+  ]
 }
 ```
 
-Example result:
-
-```json
-{
-  "available": true,
-  "product_id": 1,
-  "quantity_requested": 1,
-  "stock_quantity": 15
-}
-```
-
-The stock value comes from PostgreSQL.
+Returns active products ranked by total units sold (via `order_items`), optionally filtered by category. Used for `recommendation` intent queries like *"what are the best selling headphones?"*.
 
 ---
 
-## `create_order`
+## RAG Pipeline
 
-Input:
-
-```json
-{
-  "customer_id": 1,
-  "product_id": 1,
-  "quantity": 2
-}
+```
+KnowledgeDocument (PostgreSQL)
+  → Normalize / strip whitespace
+  → Chunk (700 chars, 100 overlap)
+  → Embed (SentenceTransformer)
+  → Upsert → ChromaDB
+        (chunk IDs: doc-{id}-chunk-{index})
 ```
 
-Example successful result:
+### CRUD Synchronisation
 
-```json
-{
-  "success": true,
-  "order_id": 123,
-  "status": "confirmed",
-  "total_price": 1399.98
-}
-```
+| Operation | Flow |
+|---|---|
+| **Create** | INSERT PostgreSQL → chunk → embed → ChromaDB ADD |
+| **Update** | New chunks upserted → obsolete old chunks deleted → PostgreSQL COMMIT |
+| **Delete** | ChromaDB chunks deleted by metadata filter → PostgreSQL DELETE |
 
-This tool must actually:
+All knowledge CRUD goes through `KnowledgeService`, never direct ORM creation, ensuring PostgreSQL and ChromaDB stay in sync.
 
-1. Validate the customer.
-2. Validate the product.
-3. Validate product status.
-4. Validate quantity.
-5. Validate stock.
-6. Read the current product price.
-7. Create the order.
-8. Create the order item.
-9. Decrement stock.
-10. Commit the transaction.
+> If the vector store becomes inconsistent, run `python scripts/seed.py` (for fresh environments) or rebuild from the admin panel.
 
 ---
 
-## Transactional Order Creation
+## API Reference
 
-```text
-Validate customer
-       |
-       v
-Validate product
-       |
-       v
-Validate quantity
-       |
-       v
-Validate stock
-       |
-       v
-Read current price
-       |
-       v
-Create Order
-       |
-       v
-Create OrderItem
-       |
-       v
-Decrement stock
-       |
-       v
-COMMIT
-```
+### Chat
 
-If any step fails:
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/chat` | Chat UI |
+| `POST` | `/api/chat` | Send a message |
+| `GET` | `/health` | Health check |
 
-```text
-ROLLBACK
-```
-
-No partial order should remain.
-
----
-
-# 14. Conversation Context
-
-The assistant supports multi-turn conversations.
-
-Example:
-
-```text
-User:
-I'm interested in the Samsung Galaxy S24.
-
-Agent:
-The Samsung Galaxy S24 is ...
-
-User:
-What's its price?
-
-Agent:
-The Samsung Galaxy S24 currently costs ...
-```
-
-The word `"its"` should be resolved from the conversation context.
-
-Conversation state must be scoped per conversation.
-
-Do not use a global Python variable for customer conversation state.
-
-Conversation history is currently scoped by an application-level conversation ID and stored in the in-memory conversation service. It is not a LangGraph persistent checkpoint. Production deployment should move conversation state to a persistent store and associate it with an authenticated customer/session.
-
----
-
-# 15. Flask API and Controllers
-
-The application uses the Flask application-factory pattern.
-
-## Chat Controller
-
-Main routes:
-
-```text
-GET  /chat
-POST /api/chat
-GET  /health
-```
-
-### `GET /chat`
-
-Renders the chat interface.
-
-### `POST /api/chat`
-
-Request:
-
+**`POST /api/chat`**
 ```json
+// Request
 {
   "message": "What is your return policy?",
-  "conversation_id": "conversation-123"
+  "customer_id": 1,
+  "conversation_id": "session-abc"
 }
-```
 
-Response:
-
-```json
+// Response
 {
-  "response": "Our return policy is ...",
-  "conversation_id": "conversation-123"
+  "success": true,
+  "conversation_id": "session-abc",
+  "response": "Our return policy allows ...",
+  "intent": "policy_question",
+  "tool_result": null
 }
 ```
 
-### `GET /health`
+### Admin
 
-Returns:
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/admin/` | Dashboard overview |
+| `GET` | `/admin/products` | List products |
+| `POST` | `/admin/products/create` | Add product |
+| `POST` | `/admin/products/<id>/edit` | Edit product |
+| `POST` | `/admin/products/<id>/deactivate` | Deactivate product |
+| `GET` | `/admin/orders` | List orders |
+| `GET` | `/admin/customers` | List customers |
+| `GET` | `/admin/knowledge` | List knowledge documents |
+| `POST` | `/admin/knowledge/create` | Add document (syncs RAG) |
+| `POST` | `/admin/knowledge/<id>/edit` | Update document (syncs RAG) |
+| `POST` | `/admin/knowledge/<id>/delete` | Delete document (syncs RAG) |
 
-```json
-{
-  "status": "ok"
-}
-```
+### Facebook Messenger
 
----
-
-# 16. Admin Dashboard
-
-The admin dashboard is implemented using Flask + Jinja2.
-
-No React is required.
-
-## Dashboard
-
-Provides an overview of business data and navigation to:
-
-- Products.
-- Orders.
-- Customers.
-- Knowledge.
-
-## Products
-
-The administrator can:
-
-- List products.
-- Add products.
-- Edit products.
-- Delete/deactivate products.
-- View stock.
-- View current price.
-
-## Orders
-
-The administrator can view:
-
-- Order ID.
-- Customer.
-- Status.
-- Total.
-- Creation time.
-- Order items where appropriate.
-
-## Customers
-
-The administrator can view:
-
-- Customer ID.
-- Name.
-- Email.
-- Order count where convenient.
-
-## Knowledge
-
-The administrator can:
-
-- List knowledge documents.
-- Add documents.
-- Edit documents.
-- Delete documents.
-
-Knowledge mutations go through:
-
-```text
-Admin Controller
-      |
-      v
-KnowledgeService
-      |
-      +--> PostgreSQL
-      |
-      +--> ChromaDB synchronization
-```
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/webhooks/facebook` | Webhook verification |
+| `POST` | `/webhooks/facebook` | Receive Messenger events |
 
 ---
 
-# 17. Prompt and Grounding Rules
+## Admin Dashboard
 
-The agent uses explicit grounding rules.
+The Jinja2-based dashboard provides:
 
-## System Prompt Principles
-
-The assistant should:
-
-- Act as an electronics-store sales/customer-service assistant.
-- Be helpful and concise.
-- Use retrieved knowledge when answering business-knowledge questions.
-- Use tools for actions requiring current backend state.
-- Never invent business facts.
-- Ask for clarification when required information is missing.
-- Prefer current PostgreSQL facts for price/stock/order information.
-- Never claim an order was created unless the order tool confirms success.
-
-## RAG Prompt
-
-Conceptually:
-
-```text
-Answer using the supplied business context.
-
-If the context does not contain the answer,
-say that the information is unavailable.
-
-Do not invent policies, prices, stock levels,
-or order details.
-```
-
-## Tool Prompt
-
-Conceptually:
-
-```text
-Never claim an action succeeded unless the
-tool returned success.
-```
+- **Overview** — total products, orders, customers, knowledge documents
+- **Products** — list, create, edit, deactivate; shows live price and stock
+- **Orders** — full order history with customer, status, total, and timestamps
+- **Customers** — customer directory
+- **Knowledge** — create / edit / delete knowledge documents; every mutation automatically syncs ChromaDB
 
 ---
 
-# 18. Error Handling
+## Environment Variables
 
-The application handles errors at multiple layers.
-
-## Database Errors
-
-Examples:
-
-- Connection failure.
-- Constraint violation.
-- Transaction failure.
-
-Customer-facing response should be controlled.
-
-Technical details go to logs.
-
-## RAG Errors
-
-Examples:
-
-- Embedding failure.
-- ChromaDB failure.
-- Retrieval failure.
-
-The application should not fabricate an answer.
-
-## LLM Errors
-
-Examples:
-
-- Timeout.
-- Provider error.
-- Invalid structured output.
-
-Return a safe message rather than exposing a stack trace.
-
-## Tool Errors
-
-Examples:
-
-- Product not found.
-- Customer not found.
-- Invalid quantity.
-- Insufficient stock.
-- Product inactive.
-
-These become structured tool results and are converted into customer-friendly responses.
-
-## HTTP Errors
-
-The application handles:
-
-```text
-400 Bad Request
-404 Not Found
-500 Internal Server Error
-```
-
-API errors should return structured JSON.
-
-Dashboard errors currently return controlled HTTP error responses. Production UI can use Flask flash messages for a more user-friendly experience.
-
----
-
-# 19. Security
-
-The project includes basic security practices.
-
-## Secrets
-
-Secrets are stored in environment variables.
-
-Never commit:
-
-```text
-.env
-```
-
-Never hard-code API keys.
-
-## Database Access
-
-The LLM must never generate and execute arbitrary SQL.
-
-All database operations go through application code and SQLAlchemy.
-
-## Input Validation
-
-Validate:
-
-- Form fields.
-- API fields.
-- Product IDs.
-- Customer IDs.
-- Quantities.
-- Prices and non-negative stock values.
-- Knowledge-document fields.
-
-## No Arbitrary Code Execution
-
-Do not use:
-
-```python
-eval(...)
-```
-
-Do not allow the LLM to execute arbitrary Python.
-
-## Admin Authentication
-
-For development, basic admin routes may remain unauthenticated to keep scope manageable.
-
-For production, authentication and authorization should be added.
-
-## Sensitive Logging
-
-Never log:
-
-- API keys.
-- Passwords.
-- Unnecessary customer-sensitive information.
-
----
-
-# 20. Technology Stack
-
-| Technology | Purpose |
-|---|---|
-| Python 3.11+ | Main language |
-| Flask | Web application/backend |
-| Flask-SQLAlchemy | ORM integration |
-| PostgreSQL | Relational source of truth |
-| SQLAlchemy | Database ORM |
-| Jinja2 | Server-side templates |
-| HTML/CSS/JS | UI |
-| LangGraph | Agent orchestration |
-| LangChain | LLM/tool integrations where useful |
-| ChromaDB | Vector retrieval |
-| Sentence Transformers / embedding provider | Embeddings |
-| LLM Provider | Language understanding and generation |
-| Pydantic | Structured validation |
-| pytest | Testing |
-| Docker | Containerization |
-| Docker Compose | Local multi-container environment |
-| python-dotenv | Environment configuration |
-
-Provider-specific LLM/embedding integrations should be isolated so they can be replaced without rewriting the entire graph.
-
----
-
-# 21. Environment Variables
-
-Create a local `.env` from `.env.example`.
-
-Example:
+Copy `.env.example` to `.env` and fill in your values:
 
 ```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/ai_sales_agent
+# Flask
+FLASK_SECRET_KEY=change-me
 
-LLM_API_KEY=your_api_key
-LLM_MODEL=your_model
+# PostgreSQL
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/ai_sales_agent
+TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/ai_sales_agent_test
 
-EMBEDDING_MODEL=your_embedding_model
+# Groq LLM
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=qwen/qwen3.8-27b
 
+# Embeddings & Vector Store
+EMBEDDING_MODEL=all-MiniLM-L6-v2
 CHROMA_PATH=./chroma_data
 
-FLASK_SECRET_KEY=change_me
+# Admin UI timezone — any IANA string, e.g. Asia/Riyadh, Europe/Istanbul, America/New_York
+# Defaults to UTC if not set.
+DISPLAY_TIMEZONE=UTC
+
+# Facebook Messenger (optional)
+FACEBOOK_VERIFY_TOKEN=your_verify_token
+FACEBOOK_PAGE_ACCESS_TOKEN=your_page_access_token
+FACEBOOK_PAGE_ID=your_page_id
+FACEBOOK_APP_SECRET=your_app_secret
+FACEBOOK_GRAPH_VERSION=v24.0
 ```
 
-## Variables
-
-### `DATABASE_URL`
-
-PostgreSQL connection string.
-
-### `LLM_API_KEY`
-
-API key for the selected LLM provider.
-
-### `LLM_MODEL`
-
-Model name used by the LLM adapter.
-
-### `EMBEDDING_MODEL`
-
-Embedding model used by the RAG layer.
-
-### `CHROMA_PATH`
-
-Persistent ChromaDB storage location.
-
-### `FLASK_SECRET_KEY`
-
-Flask session/security key.
-
-> Never commit the real `.env` file.
+> ⚠️ Never commit `.env` — it is in `.gitignore`.
 
 ---
 
-# 22. Local Installation
+## Quick Start
 
-## Prerequisites
-
-Install:
+### Prerequisites
 
 - Python 3.11+
-- Git
-- PostgreSQL, or Docker Desktop with Docker Compose
-- An API key for the selected LLM provider if using a hosted model
+- PostgreSQL (or Docker Desktop)
+- Groq API key ([console.groq.com](https://console.groq.com))
+- ngrok ([ngrok.com](https://ngrok.com)) — only needed for Facebook Messenger integration
 
-## Clone the Repository
+### 1 — Clone
 
 ```bash
 git clone <repository-url>
-cd ai-sales-agent
+cd ai-sales-and-customer-service-agent
 ```
 
-## Create Virtual Environment
-
-Windows PowerShell:
+### 2 — Virtual Environment
 
 ```powershell
+# Windows
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 ```
 
-Linux/macOS:
-
 ```bash
+# Linux / macOS
 python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-## Install Dependencies
+### 3 — Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Configure Environment
-
-Windows:
+### 4 — Configure Environment
 
 ```powershell
-copy .env.example .env
+copy .env.example .env   # Windows
+```
+```bash
+cp .env.example .env     # Linux / macOS
 ```
 
-Linux/macOS:
+Edit `.env` — at minimum set `GROQ_API_KEY` and `DATABASE_URL`.
+
+### 5 — Start PostgreSQL
 
 ```bash
-cp .env.example .env
+docker compose up -d postgres
 ```
 
-Edit `.env` with the required values.
+Or use a local PostgreSQL instance.
 
----
-
-# 23. Database Setup and Seed Data
-
-The seed script provides deterministic development data.
-
-Expected seed content:
-
-### Products
-
-At least:
-
-```text
-Samsung Galaxy S24
-iPhone 15
-Google Pixel 8
-MacBook Air M3
-```
-
-### Customer
-
-At least one demo customer.
-
-### Knowledge Documents
-
-At least:
-
-```text
-Return Policy
-Shipping Policy
-Warranty Policy
-Payment Methods
-```
-
-Run:
+### 6 — Seed the Database
 
 ```bash
-python scripts/seed.py
+python -m scripts.seed
 ```
 
-The exact reset/reseed behavior should be documented by the implementation.
+This creates:
+- 4 demo products (Samsung Galaxy S24, iPhone 15, Google Pixel 8, MacBook Air M3)
+- 1 demo customer
+- 4 knowledge documents (Return Policy, Shipping Policy, Warranty Policy, Payment Methods) — ingested into both PostgreSQL **and** ChromaDB
 
----
-
-# 24. Running the Application
-
-After PostgreSQL is running and the environment is configured:
+### 7 — Run
 
 ```bash
-python scripts/seed.py
 python run.py
 ```
 
-The application will be available at:
-
-```text
-http://127.0.0.1:5000
-```
-
-Health endpoint:
-
-```text
-http://127.0.0.1:5000/health
-```
-
-Chat:
-
-```text
-http://127.0.0.1:5000/chat
-```
-
-Admin dashboard:
-
-```text
-http://127.0.0.1:5000/admin
-```
+| URL | Description |
+|---|---|
+| `http://127.0.0.1:5000` | Redirects to `/chat` |
+| `http://127.0.0.1:5000/chat` | Chat interface |
+| `http://127.0.0.1:5000/admin/` | Admin dashboard |
+| `http://127.0.0.1:5000/health` | Health check |
 
 ---
 
-# 25. Docker
+## Facebook Messenger Setup (optional)
 
-The project provides:
+The agent supports Facebook Messenger via a webhook. In development, use **ngrok** to expose your local Flask server to the internet.
 
-```text
-Dockerfile
-docker-compose.yml
-```
-
-The Compose environment contains at least:
-
-```text
-app
-postgres
-```
-
-PostgreSQL data should use a persistent volume.
-
-ChromaDB data should also be persisted through a mounted directory or volume.
-
-## Start
+### 1 — Start the App
 
 ```bash
+python run.py
+```
+
+### 2 — Expose with ngrok
+
+In a separate terminal:
+
+```bash
+ngrok http 5000
+```
+
+Copy the **Forwarding** URL, e.g. `https://a1b2-xx-xx-xx-xx.ngrok-free.app`.
+
+### 3 — Configure `.env`
+
+Add the Facebook credentials to your `.env`:
+
+```env
+FACEBOOK_VERIFY_TOKEN=ai_sales_agent_verify_2026
+FACEBOOK_PAGE_ACCESS_TOKEN=<your-page-access-token>
+FACEBOOK_PAGE_ID=<your-page-id>
+FACEBOOK_APP_SECRET=<your-app-secret>
+FACEBOOK_GRAPH_VERSION=v24.0
+```
+
+Restart the app after updating `.env`.
+
+### 4 — Register the Webhook in Meta Developer Portal
+
+1. Go to [developers.facebook.com](https://developers.facebook.com) → your App → **Messenger** → **Webhooks**.
+2. Click **Add Callback URL** and enter:
+   ```
+   https://<your-ngrok-url>/webhooks/facebook
+   ```
+3. Enter your **Verify Token** (must match `FACEBOOK_VERIFY_TOKEN` in `.env`).
+4. Click **Verify and Save** — the app responds to the `GET /webhooks/facebook` handshake automatically.
+5. Under **Webhook Fields**, subscribe to **`messages`**.
+
+### 5 — Subscribe the Page
+
+In the **Messenger** settings, connect the webhook to your Facebook Page.
+
+### 6 — Test
+
+Send a message to your Facebook Page from Messenger. The agent will reply using the same LangGraph pipeline as the web chat.
+
+> **Note:** ngrok URLs change on each restart unless you use a paid static domain. Update the callback URL in the Meta portal whenever the URL changes.
+
+| Webhook Route | Method | Purpose |
+|---|---|---|
+| `/webhooks/facebook` | `GET` | Verify token handshake with Meta |
+| `/webhooks/facebook` | `POST` | Receive and process Messenger messages |
+
+---
+
+## Docker
+
+The `docker-compose.yml` provides a PostgreSQL service with a persistent volume.
+
+```bash
+# Start PostgreSQL
 docker compose up -d
-```
 
-## View Logs
+# View logs
+docker compose logs -f
 
-```bash
-docker compose logs -f app
-```
-
-## Stop
-
-```bash
+# Stop
 docker compose down
-```
 
-To remove persistent development data as well:
-
-```bash
+# Stop and remove all data volumes
 docker compose down -v
 ```
 
-> Be careful with `-v`: it removes Docker volumes and therefore can delete local development database data.
-
-All secrets and configuration should be provided through environment variables.
+> ⚠️ `-v` removes the Docker volume and deletes all database data.
 
 ---
 
-# 26. Testing
+## Testing
 
-The test suite uses `pytest`.
-
-Run:
+The test suite requires `TEST_DATABASE_URL` to be set (see `.env.example`).
 
 ```bash
+# Run all tests
 pytest
-```
 
-or:
-
-```bash
+# Verbose output
 pytest -v
+
+# With coverage
+pytest --cov=app
 ```
 
-## Model Tests
+### Test Coverage
 
-Verify:
+| Module | Tests |
+|---|---|
+| `test_product_service.py` | Product lookup, search, availability |
+| `test_order_service.py` | Order creation, validation, stock decrement, rollback |
+| `test_knowledge_service.py` | RAG create/update/delete and retrieval verification |
+| `test_knowledge_consistency.py` | PostgreSQL rollback when vector ingestion fails |
+| `test_tools.py` | All three agent tools via real DB |
+| `test_agent_nodes.py` | `prepare_tool_input`, error guard on `generate_response` |
+| `test_agent_routing.py` | Intent → tool routing, conditional edge functions |
+| `test_agent_edge_cases.py` | Missing quantity, missing product, edge routing |
+| `test_integration_order_flow.py` | End-to-end order flow with mocked LLM |
+| `test_controllers.py` | Chat API endpoints |
+| `test_admin_controller.py` | Admin page HTTP responses |
+| `test_admin_crud.py` | Admin product & knowledge CRUD validation |
 
-- Product creation.
-- Customer uniqueness.
-- Relationships.
-- Database constraints.
-
-## Product Tests
-
-Verify:
-
-- Valid product.
-- Product lookup.
-- Availability.
-- Unavailable product.
-- Stock validation.
-
-## Order Tests
-
-Verify:
-
-- Successful order.
-- Correct total.
-- Correct order item.
-- Stock decrement.
-- Missing product.
-- Invalid quantity.
-- Insufficient stock.
-- Transaction rollback.
-
-## RAG Tests
-
-Verify:
-
-```text
-Create document
-      |
-      v
-Retrieve document
-```
-
-Then:
-
-```text
-Update document
-      |
-      v
-Retrieve updated content
-      |
-      v
-Old content must not be returned
-```
-
-Then:
-
-```text
-Delete document
-      |
-      v
-Deleted content must no longer be retrieved
-```
-
-## Tool Tests
-
-Verify:
-
-- Availability tool.
-- Create-order tool.
-- Invalid input.
-- Insufficient stock.
-- Service integration.
-
-## Agent Tests
-
-Use mocked LLM/retriever/tool components where appropriate.
-
-Verify:
-
-```text
-Policy question -> RAG
-Availability -> availability tool
-Purchase -> create-order tool
-Unknown request -> safe response
-```
-
-The full test suite should not depend on external API availability.
+The full test suite **does not call external APIs** — the LLM is mocked in all agent tests.
 
 ---
 
-# 27. Example Conversations
+## Example Conversations
 
-## Example 1 — Customer Service / RAG
-
-```text
-User:
-What is your return policy?
-
-Agent:
-Our return policy allows ...
+### Policy Question (RAG)
 ```
+User:  What is your return policy?
+Agent: Our return policy allows you to return eligible products within
+       30 days of purchase, provided they are in good condition with
+       original packaging...
+```
+Flow: `policy_question` → RAG retrieval → grounded response
 
-Expected behavior:
+### Product Inquiry
+```
+User:  Tell me about the Samsung Galaxy S24.
+Agent: The Samsung Galaxy S24 is priced at $699.99 and we currently
+       have 15 units in stock. [description from DB]
+```
+Flow: `product_question` → `get_product_details` tool → PostgreSQL
 
-```text
-User request
-    |
-    v
-Intent = policy_question
-    |
-    v
-RAG retrieval
-    |
-    v
-Relevant return-policy chunks
-    |
-    v
-Grounded response
+### Availability Check
+```
+User:  Can I buy 3 Samsung Galaxy S24?
+Agent: Yes, we have 15 Samsung Galaxy S24 units available, so
+       3 units are in stock for you.
+```
+Flow: `availability_check` → `check_product_availability` tool → PostgreSQL
+
+### Order Creation
+```
+User:  I want to buy 2 Samsung Galaxy S24.
+Agent: Your order has been placed! Order #42 confirmed.
+       2 × Samsung Galaxy S24 @ $699.99 = $1,399.98
+```
+Flow: `create_order` → `OrderService` → PostgreSQL transaction
+
+### Insufficient Stock
+```
+User:  I want to buy 100 Samsung Galaxy S24.
+Agent: I'm sorry, but only 15 units are currently available.
+       Would you like to order a smaller quantity?
+```
+No order created. No stock modified. Clean controlled response.
+
+### Best Sellers / Recommendation
+```
+User:  What are the best selling headphones?
+Agent: Here are our top-selling headphones:
+       1. Samsung Earbuds 4 Pro — $379.99 (5 sold)
+       2. ...
+```
+Flow: `recommendation` → `extract_category` ("headphones") → `get_best_sellers` tool → PostgreSQL ranked by `order_items`
+
+### Fuzzy Product Matching (Typo Tolerance)
+```
+User:  I am interested in samsng galaxy s24     ← typo
+Agent: Great news! I found the Samsung Galaxy S24 for you...
+```
+Flow: `product_search` → exact ILIKE (no match) → rapidfuzz fallback (~85% score) → resolved to Samsung Galaxy S24
+
+### Multi-Turn Context
+```
+User:  I'm interested in the Samsung Galaxy S24.
+Agent: The Samsung Galaxy S24 is ...
+
+User:  What's its price?           ← "its" resolved from labeled history
+Agent: The Samsung Galaxy S24 is currently priced at $699.99.
+
+User:  Do you have it now?         ← "it" resolved across turns
+Agent: Yes, we currently have 15 units of the Samsung Galaxy S24 in stock.
 ```
 
 ---
 
-## Example 2 — Product Recommendation
+## Design Decisions
 
-```text
-User:
-I need a phone under $700 with a good camera.
-```
+### Why a Modular Monolith?
+Simple to develop, test, and deploy locally without Kubernetes, Kafka, Redis, or microservices. Module boundaries are already clearly drawn, making a future split into services straightforward if needed.
 
-Expected behavior:
+### Why a Service Layer?
+Order creation alone has 10+ steps (validate → calculate → create → decrement → commit). Embedding these rules in Flask controllers makes them impossible to reuse and difficult to test. `OrderService` is the single authoritative implementation.
 
-1. Understand recommendation intent.
-2. Search current products.
-3. Use PostgreSQL for current prices/availability.
-4. Optionally use RAG for descriptive information.
-5. Recommend suitable products.
+### Why PostgreSQL as Source of Truth for Price/Stock?
+A vector index is optimised for semantic similarity, not transactional consistency. Storing price in ChromaDB would create a stale-data problem whenever products are updated. PostgreSQL provides ACID guarantees; ChromaDB does not.
 
-The assistant must not present stale vectorized prices as current.
+### Why LangGraph?
+The agent is not a simple prompt → response loop. It has explicit decision nodes (route to RAG vs tool, resolve product, validate inputs) that benefit from a structured graph. LangGraph makes the workflow inspectable and testable at each node.
 
----
+### Why Tools Instead of LLM-Generated SQL?
+The LLM is probabilistic. Database mutations (stock decrement, order creation) require deterministic validation. Tools provide a typed, validated interface between the LLM's intent and the database transaction — the LLM cannot bypass stock checks or skip transaction rollback.
 
-## Example 3 — Availability
-
-```text
-User:
-Is the Samsung Galaxy S24 available?
-```
-
-Expected behavior:
-
-```text
-Intent
-  |
-  v
-availability_check
-  |
-  v
-check_product_availability
-  |
-  v
-PostgreSQL
-  |
-  v
-Current stock
-```
+### Why ChromaDB?
+Simple local vector database with persistent storage, no external service required. The RAG layer is isolated behind `ChromaVectorStore` and `KnowledgeRetriever` interfaces, making it straightforward to swap in a production vector store.
 
 ---
 
-## Example 4 — Real Order
+## Limitations & Future Work
 
-```text
-User:
-I want to buy 2 Samsung Galaxy S24.
-```
+### Current Limitations
 
-Expected behavior:
+| Area | Limitation |
+|---|---|
+| **Auth** | Admin dashboard has no authentication (intentional for scope) |
+| **Conversation state** | In-memory only — lost on restart, not shared across processes |
+| **Retrieval** | Basic cosine similarity only |
+| **Facebook** | Webhook errors are logged but not retried |
 
-```text
-Intent = create_order
-       |
-       v
-create_order tool
-       |
-       v
-OrderService
-       |
-       v
-Validate
-       |
-       v
-Create Order + OrderItem
-       |
-       v
-Decrement stock
-       |
-       v
-COMMIT
-       |
-       v
-Return order ID
-       |
-       v
-Agent confirms successful order
-```
+### Future Improvements
 
-The order must be visible in the admin dashboard.
+**Authentication & Security**
+- Admin login, RBAC, CSRF protection, HTTPS, rate limiting
+
+**Retrieval Quality**
+- Hybrid search (dense + sparse), reranking, query rewriting, HyDE, retrieval evaluation
+
+**Conversation State**
+- Persistent session store (Redis / PostgreSQL), authenticated sessions
+
+**Observability**
+- Structured logging, distributed tracing, agent execution tracing, LLM cost tracking
+
+**AI Reliability**
+- Prompt versioning, RAG evaluation datasets, hallucination monitoring, guardrails, model fallback
+
+**Scalability**
+- The modular boundaries already isolate services cleanly — individual components (agent, knowledge ingestion) can be extracted into separate services when traffic demands it.
 
 ---
 
-# 28. End-to-End Demo
-
-## Step 1 — Start the Application
-
-```bash
-docker compose up -d
-```
-
-or start PostgreSQL locally and run:
-
-```bash
-python run.py
-```
-
-## Step 2 — Open Chat
-
-Open:
-
-```text
-/chat
-```
-
-## Step 3 — Demonstrate RAG
-
-Ask:
-
-```text
-What is your return policy?
-```
-
-Show that the answer is based on the knowledge base.
-
-## Step 5 — Demonstrate Availability
-
-Ask:
-
-```text
-Is the Samsung Galaxy S24 available?
-```
-
-Show the database-backed availability result.
-
-## Step 6 — Demonstrate Real Business Action
-
-Ask:
-
-```text
-I want to buy 2 Samsung Galaxy S24.
-```
-
-Show:
-
-- Tool execution.
-- Order creation.
-- Stock decrement.
-- Order ID.
-- Successful transaction.
-
-## Step 7 — Open Admin Dashboard
-
-Navigate to:
-
-```text
-/admin/orders
-```
-
-Show the created order.
-
-## Step 8 — Demonstrate RAG CRUD
-
-Open:
-
-```text
-/admin/knowledge
-```
-
-Edit the return policy.
-
-Example:
-
-```text
-30-day return policy
-```
-
-Change it to:
-
-```text
-45-day return policy
-```
-
-Save it.
-
-Ask the agent:
-
-```text
-Can I return an item after 40 days?
-```
-
-The agent should use the updated knowledge.
-
-## Step 9 — Demonstrate Conversation Context
-
-Ask:
-
-```text
-I'm interested in the Samsung Galaxy S24.
-```
-
-Then:
-
-```text
-What's its price?
-```
-
-The agent should resolve `"its"` using conversation context.
-
-## Step 10 — Demonstrate Failure Handling
-
-Ask:
-
-```text
-I want to buy 100 Samsung Galaxy S24.
-```
-
-Expected behavior:
-
-- No order created.
-- No stock corruption.
-- Helpful insufficient-stock response.
-- Error handled through the application/service layer.
-
----
-
-# 29. RAG Update Demonstration
-
-## Initial State
-
-Knowledge document:
-
-```text
-Title: Return Policy
-
-Customers can return eligible products within 30 days.
-```
-
-Ask:
-
-```text
-Can I return this after 20 days?
-```
-
-Expected:
-
-```text
-Yes, according to the current return policy...
-```
-
-## Update
-
-Administrator changes:
-
-```text
-30 days
-```
-
-to:
-
-```text
-45 days
-```
-
-The system:
-
-```text
-PostgreSQL UPDATE
-      |
-      v
-Delete old Chroma chunks
-      |
-      v
-Chunk new document
-      |
-      v
-Embed new chunks
-      |
-      v
-Chroma ADD
-```
-
-## Verify
-
-Ask:
-
-```text
-Can I return this after 40 days?
-```
-
-Expected:
-
-```text
-Yes, based on the updated 45-day policy...
-```
-
-The old 30-day vector must not remain available to retrieval.
-
----
-
-# 30. Failure Scenarios
-
-## Insufficient Stock
-
-Request:
-
-```text
-Buy 100 Samsung Galaxy S24.
-```
-
-Expected:
-
-```text
-No order created.
-Stock remains unchanged.
-Customer receives a clear message.
-```
-
-## Product Not Found
-
-Request:
-
-```text
-Buy 2 Unknown Phone XYZ.
-```
-
-Expected:
-
-```text
-Product not found.
-No transaction is committed.
-```
-
-## Invalid Quantity
-
-Request:
-
-```text
-Buy -5 Samsung Galaxy S24.
-```
-
-Expected:
-
-```text
-Tool/service rejects the request.
-No database mutation.
-```
-
-## Missing RAG Knowledge
-
-Request:
-
-```text
-What is your policy about a topic that does not exist in the knowledge base?
-```
-
-Expected:
-
-```text
-The assistant should state that the information
-is unavailable rather than inventing a policy.
-```
-
-## LLM Failure
-
-If the LLM provider is unavailable:
-
-```text
-Return a controlled error message.
-Log technical details.
-Do not expose stack traces.
-```
-
-## Vector Store Failure
-
-If ChromaDB fails during synchronization:
-
-```text
-Do not silently claim synchronization succeeded.
-Log the failure.
-Inform the administrator.
-Use rebuild_vector_store.py as the recovery path.
-```
-
----
-
-# 31. Design Decisions
-
-## Why a Modular Monolith?
-
-A modular monolith provides:
-
-- Simpler development.
-- Easier debugging.
-- Easier local setup.
-- Clear module boundaries.
-- Lower operational complexity.
-
-There is no need for:
-
-- Kubernetes.
-- Kafka.
-- Redis.
-- Microservices.
-- React.
-
----
-
-## Why MVC?
-
-MVC provides a clear separation between:
-
-```text
-Model
-View
-Controller
-```
-
-But business logic is intentionally separated into Services.
-
-This avoids a common problem where Flask route handlers become large functions containing:
-
-- Database queries.
-- Validation.
-- Business logic.
-- LLM calls.
-- HTML rendering.
-
-Instead:
-
-```text
-Controller -> Service -> Model/Database
-Controller -> Agent -> Service/RAG/LLM
-```
-
----
-
-## Why a Service Layer?
-
-Consider order creation.
-
-The order operation contains multiple rules:
-
-```text
-Customer exists
-Product exists
-Product active
-Quantity > 0
-Stock sufficient
-Calculate total
-Create order
-Create item
-Decrement stock
-Commit transaction
-```
-
-Putting these rules inside a Flask controller would make them difficult to reuse and test.
-
-`OrderService` provides one centralized business operation.
-
----
-
-## Why PostgreSQL as Source of Truth?
-
-Transactional facts require consistency.
-
-For example:
-
-```text
-Stock = 3
-```
-
-must come from the current database state.
-
-A vector index is optimized for semantic retrieval, not transactional consistency.
-
----
-
-## Why ChromaDB?
-
-ChromaDB provides a simple local vector database suitable for:
-
-- Semantic retrieval.
-- Metadata.
-- Persistent local development.
-- Demonstrating RAG clearly.
-
-The architecture keeps it replaceable.
-
----
-
-## Why LangGraph?
-
-LangGraph is useful because the assistant is not simply:
-
-```text
-Prompt -> LLM -> Response
-```
-
-The application has explicit workflow steps:
-
-```text
-Understand
-   |
-Route
-   |
-Retrieve / Tool
-   |
-Respond
-```
-
-This makes the agent behavior:
-
-- More explicit.
-- Easier to debug.
-- Easier to test.
-- Easier to extend.
-- Easier to explain during an interview.
-
----
-
-## Why Tools Instead of Letting the LLM Write SQL?
-
-The LLM is probabilistic.
-
-Database mutations require deterministic validation.
-
-Therefore:
-
-```text
-LLM decides:
-"I should create an order."
-
-Application decides:
-"Is this order valid?"
-```
-
-The LLM cannot bypass:
-
-- Stock validation.
-- Quantity validation.
-- Product validation.
-- Customer validation.
-- Transaction handling.
-
----
-
-# 33. Limitations
-
-
-## Authentication
-
-Production deployment should add:
-
-- Authentication.
-- Authorization.
-- Admin roles.
-- CSRF protection.
-
-## LLM Provider Dependency
-
-The quality of natural-language understanding and response generation depends on the configured LLM provider.
-
-## Simple Retrieval
-
-The initial retriever uses standard semantic similarity.
-
-More advanced systems could add:
-
-- Reranking.
-- Hybrid search.
-- Query expansion.
-- HyDE.
-- Retrieval evaluation.
-
-## Local Vector Database
-
-A production system may use a managed/distributed vector database depending on scale.
-
-## No Distributed Architecture
-
-The application is a modular monolith.
-
-It does not attempt to solve:
-
-- Multi-region deployment.
-- Distributed task queues.
-- Horizontal event-driven processing.
-- Large-scale service decomposition.
-
-## Admin Authentication
-
-Authentication is intentionally kept out of the mandatory scope so that effort can focus on the required AI/agent/RAG/backend functionality.
-
-## Authentication
-
-Add:
-
-- Admin login.
-- Role-based access control.
-- Session security.
-- CSRF protection.
-
-## Retrieval Quality
-
-Add:
-
-- Hybrid search.
-- Reranking.
-- Query rewriting.
-- Retrieval evaluation.
-- Better chunking strategies.
-
-## Evaluation
-
-Introduce:
-
-- RAG evaluation datasets.
-- Retrieval precision/recall.
-- Answer faithfulness.
-- Groundedness.
-- Tool success rate.
-- End-to-end task completion rate.
-
----
-
-# 35. Production Considerations
-
-Before production deployment, the following should be addressed:
-
-### Security
-
-- Admin authentication.
-- Authorization.
-- CSRF protection.
-- Secure secret management.
-- HTTPS.
-- Rate limiting.
-- Input validation.
-- Audit logging.
-
-### Reliability
-
-- Database connection pooling.
-- Retry policies.
-- Timeouts.
-- Health checks.
-- Transaction monitoring.
-- Vector-store consistency monitoring.
-
-### Observability
-
-- Structured logs.
-- Metrics.
-- Distributed tracing.
-- Agent/tool execution tracing.
-- Alerting.
-
-### AI Reliability
-
-- Prompt/version management.
-- RAG evaluation.
-- Hallucination monitoring.
-- Tool-call validation.
-- Guardrails.
-- Model fallback strategies.
-
-### Scalability
-
-If traffic grows significantly, components can later be separated into services.
-
-The current modular boundaries make that transition easier because business logic is already separated from controllers and the agent.
-
----
+## Production Checklist
+
+Before deploying to production:
+
+- [ ] Add admin authentication and RBAC
+- [ ] Enable CSRF protection
+- [ ] Move to a managed PostgreSQL instance with connection pooling
+- [ ] Move conversation state to Redis or a persistent session store
+- [ ] Replace ChromaDB with a managed vector database (e.g. Pinecone, Weaviate)
+- [ ] Add structured logging and distributed tracing
+- [ ] Configure LLM timeouts and retry/fallback policies
+- [ ] Enable HTTPS and rate limiting
+- [ ] Set up RAG evaluation to monitor retrieval quality
+- [ ] Configure secret management (e.g. AWS Secrets Manager, Vault)

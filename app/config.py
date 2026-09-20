@@ -18,7 +18,7 @@ class Config:
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
     GROQ_MODEL = os.getenv(
         "GROQ_MODEL",
-        "llama-3.3-70b-versatile",
+        "qwen/qwen3.8-27b",
     )
 
     EMBEDDING_MODEL = os.getenv(
@@ -31,3 +31,8 @@ class Config:
     FACEBOOK_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID")
     FACEBOOK_APP_SECRET = os.getenv("FACEBOOK_APP_SECRET")
     FACEBOOK_GRAPH_VERSION = os.getenv("FACEBOOK_GRAPH_VERSION", "v24.0")
+
+    # Timezone used for displaying timestamps in the admin UI.
+    # Set to any IANA timezone string, e.g. "Asia/Riyadh", "Europe/Istanbul".
+    # Defaults to UTC so stored values are always valid even without this setting.
+    DISPLAY_TIMEZONE = os.getenv("DISPLAY_TIMEZONE", "UTC")

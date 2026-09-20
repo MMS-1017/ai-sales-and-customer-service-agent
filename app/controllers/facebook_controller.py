@@ -79,42 +79,46 @@ def process_message(event):
     if not text:
         return
 
-    customer = get_or_create_facebook_customer(
-        sender_id
-    )
+    try:
+        customer = get_or_create_facebook_customer(
+            sender_id
+        )
 
-    conversation_id = (
-        f"facebook:{sender_id}"
-    )
+        conversation_id = (
+            f"facebook:{sender_id}"
+        )
 
-    history = ConversationService.get_history(
-        conversation_id
-    )
+        history = ConversationService.get_history(
+            conversation_id
+        )
 
-    result = agent_graph.invoke({
-        "messages": history + [text],
-        "customer_id": customer.id,
-    })
+        result = agent_graph.invoke({
+            "messages": history + [text],
+            "customer_id": customer.id,
+        })
 
-    response = result.get(
-        "response",
-        "Sorry, I couldn't process your request.",
-    )
+        response = result.get(
+            "response",
+            "Sorry, I couldn't process your request.",
+        )
 
-    ConversationService.add_message(
-        conversation_id,
-        text,
-    )
+        ConversationService.add_message(
+            conversation_id,
+            text,
+        )
 
-    ConversationService.add_message(
-        conversation_id,
-        response,
-    )
+        ConversationService.add_message(
+            conversation_id,
+            response,
+        )
 
-    FacebookService.send_message(
-        sender_id,
-        response,
-    )
+        FacebookService.send_message(
+            sender_id,
+            response,
+        )
+
+    except Exception as exc:
+        print(f"Error processing Facebook message from {sender_id}: {exc}")
 
 
 def get_or_create_facebook_customer(sender_id):

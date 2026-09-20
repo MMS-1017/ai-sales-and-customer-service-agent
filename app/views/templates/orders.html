@@ -150,7 +150,7 @@
                 </td>
 
                 <td>
-                    {{ order.created_at.strftime("%Y-%m-%d %H:%M") }}
+                    {{ order.created_at | localtime }}
                 </td>
 
             </tr>

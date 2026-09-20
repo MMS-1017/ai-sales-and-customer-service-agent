@@ -8,6 +8,7 @@ class AgentState(TypedDict, total=False):
     retrieved_context: list
 
     product_name: str | None
+    category: str | None
     quantity: int | None
     product_id: int | None
 

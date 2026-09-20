@@ -1,4 +1,6 @@
 from flask import Flask, redirect
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from datetime import timezone as _utc
 
 from app.config import Config
 from app.extensions import db
@@ -26,16 +28,37 @@ def create_app(test_config=None):
 
     db.init_app(app)
 
+    # ------------------------------------------------------------------
+    # Jinja2 filter: {{ dt | localtime }}
+    # Converts a UTC-aware datetime to the configured DISPLAY_TIMEZONE.
+    # Registered before db.create_all() so a DB error can't skip it.
+    # ------------------------------------------------------------------
+    try:
+        _tz = ZoneInfo(app.config.get("DISPLAY_TIMEZONE", "UTC"))
+    except (ZoneInfoNotFoundError, KeyError):
+        _tz = ZoneInfo("UTC")
+
+    def localtime_filter(dt, fmt="%Y-%m-%d %H:%M"):
+        if dt is None:
+            return ""
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_utc.utc)
+        return dt.astimezone(_tz).strftime(fmt)
+
+    app.jinja_env.filters["localtime"] = localtime_filter
+
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+        except Exception as exc:
+            print(f"[WARNING] db.create_all() failed: {exc}")
 
     @app.get("/")
     def index():
         return redirect("/chat")
-    
+
     @app.get("/health")
     def health():
         return {"status": "ok"}
-
 
     return app

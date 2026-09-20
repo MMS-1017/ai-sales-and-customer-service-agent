@@ -1,5 +1,5 @@
 from app.agent.graph import agent_graph
 
-all = [
+__all__ = [
     "agent_graph",
 ]

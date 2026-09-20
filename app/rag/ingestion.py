@@ -73,13 +73,8 @@ class KnowledgeIngestionService:
 
         return len(chunks)
 
-    def delete_document(self, document_id: int, chunk_count: int):
-        ids = [
-            f"doc-{document_id}-chunk-{index}"
-            for index in range(chunk_count)
-        ]
-
-        self.vector_store.delete_documents(ids)
+    def delete_document(self, document_id: int):
+        self.vector_store.delete_document(document_id)
 
     def ingest_all(self, documents):
         total_chunks = 0

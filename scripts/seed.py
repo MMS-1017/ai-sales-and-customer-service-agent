@@ -1,6 +1,7 @@
 from app import create_app
 from app.extensions import db
-from app.models import Customer, Product, KnowledgeDocument
+from app.models import Customer, Product
+from app.services.knowledge_service import KnowledgeService
 
 
 def seed_database():
@@ -72,62 +73,79 @@ def seed_database():
         ]
 
         db.session.add_all(products)
+        db.session.commit()
+
+        print("Database seeded successfully.")
+        print(f"Products added: {len(products)}")
+        print("Customer added: 1")
 
         # -------------------------
         # Knowledge Documents
+        # Ingested via KnowledgeService so that ChromaDB (RAG) is also populated.
+        # Direct ORM creation would bypass the vector store, making documents
+        # unsearchable by the agent.
         # -------------------------
         knowledge_documents = [
-            KnowledgeDocument(
-                title="Return Policy",
-                category="policy",
-                source="store_policy",
-                content=(
+            {
+                "title": "Return Policy",
+                "category": "policy",
+                "source": "store_policy",
+                "content": (
                     "Customers can return eligible products within 30 days of purchase. "
                     "Products must be in good condition and include the original "
                     "packaging and accessories. Some products may be subject to "
                     "additional return restrictions."
                 ),
-            ),
-            KnowledgeDocument(
-                title="Shipping Policy",
-                category="shipping",
-                source="store_policy",
-                content=(
+            },
+            {
+                "title": "Shipping Policy",
+                "category": "shipping",
+                "source": "store_policy",
+                "content": (
                     "Standard shipping usually takes 3 to 5 business days. "
                     "Customers receive tracking information after the order is shipped. "
                     "Delivery times may vary depending on the destination."
                 ),
-            ),
-            KnowledgeDocument(
-                title="Warranty Policy",
-                category="warranty",
-                source="store_policy",
-                content=(
+            },
+            {
+                "title": "Warranty Policy",
+                "category": "warranty",
+                "source": "store_policy",
+                "content": (
                     "Eligible electronics come with a one-year limited warranty "
                     "covering manufacturing defects. The warranty does not cover "
                     "accidental damage, misuse, or unauthorized modifications."
                 ),
-            ),
-            KnowledgeDocument(
-                title="Payment Methods",
-                category="payment",
-                source="store_policy",
-                content=(
+            },
+            {
+                "title": "Payment Methods",
+                "category": "payment",
+                "source": "store_policy",
+                "content": (
                     "Customers can pay using major credit and debit cards. "
                     "Payment must be successfully authorized before an order "
                     "is confirmed."
                 ),
-            ),
+            },
         ]
 
-        db.session.add_all(knowledge_documents)
+        knowledge_count = 0
+        for doc in knowledge_documents:
+            result = KnowledgeService.create_document(
+                title=doc["title"],
+                content=doc["content"],
+                category=doc["category"],
+                source=doc["source"],
+            )
+            if result["success"]:
+                knowledge_count += 1
+            else:
+                print(
+                    f"Warning: Failed to ingest knowledge document "
+                    f"'{doc['title']}': {result.get('error')}"
+                )
 
-        db.session.commit()
-
-        print("Database seeded successfully.")
-        print(f"Products added: {len(products)}")
-        print(f"Knowledge documents added: {len(knowledge_documents)}")
-        print("Customer added: 1")
+        print(f"Knowledge documents added: {knowledge_count}")
 
 
 if __name__ == "__main__":

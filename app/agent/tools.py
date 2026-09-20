@@ -19,6 +19,19 @@ class CreateOrderInput(BaseModel):
     quantity: int = Field(gt=0)
 
 
+class BestSellersInput(BaseModel):
+    category: str | None = Field(
+        default=None,
+        description="Optional product category to filter by (e.g. 'headphones', 'laptops').",
+    )
+    limit: int = Field(
+        default=5,
+        gt=0,
+        le=20,
+        description="Maximum number of results to return.",
+    )
+
+
 def get_product_details(product_id: int):
     product = ProductService.get_product(product_id)
 
@@ -55,6 +68,34 @@ def create_order(customer_id: int, product_id: int, quantity: int):
     )
 
 
+def get_best_sellers(category: str | None = None, limit: int = 5):
+    results = ProductService.get_best_sellers(category=category, limit=limit)
+
+    if not results:
+        label = f"in category '{category}'" if category else "in the store"
+        return {
+            "success": False,
+            "error": f"No products found {label}.",
+        }
+
+    products = []
+    for product, units_sold in results:
+        products.append({
+            "product_id": product.id,
+            "product_name": product.name,
+            "category": product.category,
+            "price": f"${product.price:.2f}",
+            "stock_quantity": product.stock_quantity,
+            "units_sold": int(units_sold),
+        })
+
+    return {
+        "success": True,
+        "category_filter": category,
+        "products": products,
+    }
+
+
 product_details_tool = StructuredTool.from_function(
     func=get_product_details,
     name="get_product_details",
@@ -89,8 +130,21 @@ create_order_tool = StructuredTool.from_function(
 )
 
 
+best_sellers_tool = StructuredTool.from_function(
+    func=get_best_sellers,
+    name="get_best_sellers",
+    description=(
+        "Get the best-selling products ranked by total units sold. "
+        "Accepts an optional category filter (e.g. 'headphones', 'laptops') "
+        "and an optional limit. Use this for recommendation and best-seller queries."
+    ),
+    args_schema=BestSellersInput,
+)
+
+
 TOOLS = {
     "get_product_details": product_details_tool,
     "check_product_availability": availability_tool,
     "create_order": create_order_tool,
-}
+    "get_best_sellers": best_sellers_tool,
+}

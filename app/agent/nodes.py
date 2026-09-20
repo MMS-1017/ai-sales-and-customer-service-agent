@@ -3,9 +3,10 @@ from app.agent.llm import get_llm
 from app.agent.prompts import INTENT_PROMPT, SYSTEM_PROMPT
 from app.agent.tools import TOOLS
 from app.rag import get_embedding_service, ChromaVectorStore, KnowledgeRetriever
+from app.services import ProductService
 
 from pydantic import BaseModel, Field
-from app.services import ProductService
+
 
 class ProductRequest(BaseModel):
     product_name: str | None = Field(
@@ -20,12 +21,42 @@ class ProductRequest(BaseModel):
                             )
 
 
+class CategoryRequest(BaseModel):
+    category: str | None = Field(
+                                default=None,
+                                description=(
+                                    "The product category mentioned by the customer "
+                                    "(e.g. 'headphones', 'laptops', 'smartphones'). "
+                                    "Return null if no specific category is mentioned."
+                                ),
+                            )
+
+
+#---------------------------------Conversation Formatter--------------------------------------
+def format_conversation_history(messages: list) -> str:
+    """Label alternating turns so the LLM can resolve pronouns like 'it'/'this product'.
+
+    The messages list alternates: customer, agent, customer, agent …
+    The very last message is always the current customer turn and is excluded
+    from the history (it is passed separately as the latest message).
+    """
+    if not messages:
+        return "(no prior conversation)"
+
+    lines = []
+    for i, msg in enumerate(messages):
+        role = "Customer" if i % 2 == 0 else "Agent"
+        lines.append(f"{role}: {msg}")
+    return "\n".join(lines)
+
+
 #---------------------------------Intent Understanding Node--------------------------------------
 def understand_request(state):
     llm = get_llm()
 
     messages = state.get("messages", [])
-    conversation_history = "\n".join(str(message) for message in messages[:-1])
+    # Format history (all but latest) with role labels for the intent classifier
+    conversation_history = format_conversation_history(messages[:-1])
     latest_message = messages[-1]
 
     prompt = INTENT_PROMPT.format(
@@ -59,6 +90,15 @@ def prepare_tool_input(state):
     product_id = state.get("product_id")
     quantity = state.get("quantity")
     customer_id = state.get("customer_id")
+    category = state.get("category")
+
+    if tool_name == "get_best_sellers":
+        return {
+            "tool_input": {
+                "category": category,
+                "limit": 5,
+            }
+        }
 
     if not product_id:
         return {
@@ -156,10 +196,43 @@ def agent_decision(state):
     elif intent in {"product_question", "product_search"}:
         tool_name = "get_product_details"
 
+    elif intent == "recommendation":
+        tool_name = "get_best_sellers"
+
     else:
         tool_name = None
 
     return {"tool_name": tool_name}
+
+# ---------------------------------Category Extraction Node--------------------------------------
+def extract_category(state):
+    llm = get_llm()
+
+    messages = state.get("messages", [])
+    conversation_history = format_conversation_history(messages)
+
+    prompt = f"""
+                Extract the product category from the customer's request.
+
+                Rules:
+                - Return only a generic category keyword such as 'headphones',
+                  'laptops', 'smartphones', 'tablets', 'cameras', etc.
+                - Do NOT return a brand or model name.
+                - Return null if no specific category is mentioned
+                  (the customer is asking for best sellers in general).
+
+                Conversation:
+                {conversation_history}
+            """
+
+    structured_llm = llm.with_structured_output(CategoryRequest)
+    result = structured_llm.invoke(prompt)
+
+    print("========== CATEGORY EXTRACTION ==========")
+    print("CATEGORY:", result.category)
+    print("=========================================")
+
+    return {"category": result.category}
 
 # ---------------------------------Generation Node--------------------------------------
 def generate_response(state):
@@ -202,6 +275,8 @@ def generate_response(state):
                     - Do not add product specifications from model knowledge.
                     """
 
+    conversation_text = format_conversation_history(messages)
+
     prompt = f"""
                 {SYSTEM_PROMPT}
 
@@ -211,7 +286,7 @@ def generate_response(state):
                 {tool_text}
 
                 Conversation:
-                {messages}
+                {conversation_text}
 
                 Generate the final response to the customer.
             """
@@ -260,10 +335,10 @@ def execute_tool(state):
 def extract_product_request(state):
     llm = get_llm()
 
-    conversation_history = "\n".join(
-                                    str(message)
-                                    for message in state.get("messages", [])
-                                )
+    messages = state.get("messages", [])
+    # Include the full conversation (including latest message) with role labels
+    # so the LLM can resolve pronouns like "it", "this product", "that phone".
+    conversation_history = format_conversation_history(messages)
 
     prompt = f"""
                 Extract the product request from the conversation.
@@ -303,22 +378,41 @@ def resolve_product(state):
             "error": "Product name could not be identified."
         }
 
+    # Stage 1: exact ILIKE search
     products = ProductService.search_products(query=product_name)
 
-    print("MATCHED PRODUCTS:", [
+    print("MATCHED PRODUCTS (exact):", [
         (product.id, product.name) for product in products
     ])
 
     if len(products) == 1:
-        return {
-            "product_id": products[0].id
-        }
+        return {"product_id": products[0].id}
 
+    # Stage 2: fuzzy fallback when ILIKE returned nothing (typos, misspellings)
     if not products:
+        fuzzy_matches = ProductService.fuzzy_search_products(query=product_name)
+
+        print("FUZZY MATCHES:", [
+            (p.name, score) for p, score in fuzzy_matches
+        ])
+
+        if len(fuzzy_matches) == 1:
+            # Single confident match — use it
+            return {"product_id": fuzzy_matches[0][0].id}
+
+        if len(fuzzy_matches) > 1:
+            # Multiple close candidates — ask the customer to clarify
+            options = ", ".join(p.name for p, _ in fuzzy_matches[:3])
+            return {
+                "error": f"Did you mean one of these? {options}"
+            }
+
+        # Nothing found even with fuzzy
         return {
             "error": f"Product '{product_name}' was not found."
         }
 
+    # Stage 1 returned multiple results
     return {
-        "error": "Multiple products matched the request."
-    }
+        "error": "Multiple products matched the request. Please be more specific."
+    }

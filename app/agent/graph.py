@@ -4,6 +4,7 @@ from app.agent.nodes import (
     understand_request,
     retrieve_context,
     extract_product_request,
+    extract_category,
     resolve_product,
     agent_decision,
     prepare_tool_input,
@@ -13,7 +14,12 @@ from app.agent.nodes import (
 
 
 def route_after_decision(state):
-    if state.get("tool_name"):
+    tool_name = state.get("tool_name")
+
+    if tool_name == "get_best_sellers":
+        return "extract_category"
+
+    if tool_name:
         return "extract_product_request"
 
     return "generate_response"
@@ -40,6 +46,7 @@ def build_graph():
     graph.add_node("understand_request", understand_request)
     graph.add_node("retrieve_context", retrieve_context)
     graph.add_node("extract_product_request", extract_product_request)
+    graph.add_node("extract_category", extract_category)
     graph.add_node("resolve_product", resolve_product)
     graph.add_node("agent_decision", agent_decision)
     graph.add_node("prepare_tool_input", prepare_tool_input)
@@ -56,10 +63,15 @@ def build_graph():
         route_after_decision,
         {
             "extract_product_request": "extract_product_request",
+            "extract_category": "extract_category",
             "generate_response": "generate_response",
         },
     )
 
+    # Recommendation path: extract_category → prepare_tool_input → execute_tool
+    graph.add_edge("extract_category", "prepare_tool_input")
+
+    # Product-specific path: extract_product_request → resolve_product → prepare_tool_input
     graph.add_edge("extract_product_request", "resolve_product")
 
     graph.add_conditional_edges(
@@ -85,4 +97,4 @@ def build_graph():
     return graph.compile()
 
 
-agent_graph = build_graph()
+agent_graph = build_graph()
