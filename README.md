@@ -832,3 +832,77 @@ Before deploying to production:
 - [ ] Enable HTTPS and rate limiting
 - [ ] Set up RAG evaluation to monitor retrieval quality
 - [ ] Configure secret management (e.g. AWS Secrets Manager, Vault)
+---
+
+## WhatsApp Integration (WAHA)
+
+The WhatsApp channel is an adapter around the existing `agent_graph`; it does not create a second agent.
+
+### 1. Configure `.env`
+
+Copy `.env.example` to `.env`, then set your existing database and Groq values plus:
+
+```env
+WAHA_BASE_URL=http://localhost:3000
+WAHA_API_KEY=the_same_api_key_used_by_waha
+WAHA_SESSION=default
+WAHA_WEBHOOK_SECRET=
+WAHA_DEFAULT_ENGINE=NOWEB
+WAHA_DASHBOARD_USERNAME=admin
+WAHA_DASHBOARD_PASSWORD=use_a_strong_password
+WHATSAPP_SWAGGER_USERNAME=admin
+WHATSAPP_SWAGGER_PASSWORD=use_another_strong_password
+```
+
+Use the same `WAHA_API_KEY` in the Flask app and the WAHA container. Do not commit `.env` or share its values.
+
+### 2. Start PostgreSQL and WAHA
+
+```bash
+docker compose up -d postgres waha
+docker compose ps
+```
+
+Open WAHA at `http://localhost:3000` and sign in with the dashboard credentials from `.env`. Create/start the `default` session and scan the QR code using WhatsApp → Linked devices.
+
+### 3. Start Flask
+
+In a second terminal, from the project root and with your Python virtual environment activated:
+
+```bash
+pip install -r requirements.txt
+python scripts/seed.py
+python run.py
+```
+
+The app should respond at `http://localhost:5000/health`. The dashboard/chat is at `http://localhost:5000/chat`.
+
+### 4. Configure the WAHA webhook
+
+In WAHA's dashboard/API settings, configure a webhook:
+
+- URL: `http://host.docker.internal:5000/webhooks/whatsapp`
+- Event: `message`
+- Session: `default` (if the UI asks for a session filter)
+
+`host.docker.internal` is important here: WAHA runs inside Docker while Flask runs directly on the Windows host. If Flask is also moved into the same Compose network, use `http://app:5000/webhooks/whatsapp` instead (where `app` is the Flask service name).
+
+If you configure a custom webhook header, set `X-Webhook-Secret` to the same value as `WAHA_WEBHOOK_SECRET` in `.env`. Leave `WAHA_WEBHOOK_SECRET` empty for a local test if you do not configure that header.
+
+### 5. Test from WhatsApp
+
+Send a direct message to the linked WhatsApp account, for example:
+
+- `Hello`
+- `What is your return policy?`
+- `Is Samsung Galaxy S24 available?`
+- `I want to buy 2 Samsung Galaxy S24`
+
+The webhook maps each WhatsApp chat to a customer record and invokes the existing LangGraph agent. Check the order in the Flask dashboard after the purchase test.
+
+### Notes / current limitations
+
+- Conversation history currently uses the project's in-memory `ConversationService`; it resets when Flask restarts and is not shared across multiple workers.
+- This local integration handles direct chats only; group chats are ignored.
+- The webhook endpoint should be exposed securely before any public/production deployment. Configure webhook authentication and HTTPS, and consider persistent message deduplication before production use.
+- WAHA uses a WhatsApp Web-based integration. Review its operational and account risks before relying on it for a business-critical production channel.

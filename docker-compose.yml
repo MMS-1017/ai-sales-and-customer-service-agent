@@ -1,3 +1,4 @@
+
 services:
   postgres:
     image: postgres:17
@@ -12,5 +13,27 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  waha:
+    image: devlikeapro/waha
+    container_name: ai-sales-agent-waha
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      WAHA_API_KEY: ${WAHA_API_KEY:?Set WAHA_API_KEY in .env}
+      WAHA_DASHBOARD_USERNAME: ${WAHA_DASHBOARD_USERNAME:?Set dashboard username}
+      WAHA_DASHBOARD_PASSWORD: ${WAHA_DASHBOARD_PASSWORD:?Set dashboard password}
+      WHATSAPP_SWAGGER_USERNAME: ${WHATSAPP_SWAGGER_USERNAME:?Set Swagger username}
+      WHATSAPP_SWAGGER_PASSWORD: ${WHATSAPP_SWAGGER_PASSWORD:?Set Swagger password}
+      WHATSAPP_DEFAULT_ENGINE: ${WHATSAPP_DEFAULT_ENGINE:?Set default engine}
+
+      WAHA_NAMESPACE: all
+      TZ: Africa/Cairo
+    volumes:
+      - waha_sessions:/app/.sessions
+      - waha_media:/app/.media
+
 volumes:
   postgres_data:
+  waha_sessions:
+  waha_media:

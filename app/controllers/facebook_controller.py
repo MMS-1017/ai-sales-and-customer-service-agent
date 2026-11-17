@@ -118,7 +118,13 @@ def process_message(event):
         )
 
     except Exception as exc:
-        print(f"Error processing Facebook message from {sender_id}: {exc}")
+        import traceback
+        print(f"[FB ERROR] Processing message from {sender_id}: {exc}")
+        traceback.print_exc()
+        # Print Facebook API response body if available
+        if hasattr(exc, "response") and exc.response is not None:
+            print(f"[FB API RESPONSE] Status: {exc.response.status_code}")
+            print(f"[FB API RESPONSE] Body: {exc.response.text}")
 
 
 def get_or_create_facebook_customer(sender_id):

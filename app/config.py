@@ -32,7 +32,12 @@ class Config:
     FACEBOOK_APP_SECRET = os.getenv("FACEBOOK_APP_SECRET")
     FACEBOOK_GRAPH_VERSION = os.getenv("FACEBOOK_GRAPH_VERSION", "v24.0")
 
+    WAHA_BASE_URL = os.getenv("WAHA_BASE_URL")
+    WAHA_API_KEY = os.getenv("WAHA_API_KEY")
+    WAHA_SESSION = os.getenv("WAHA_SESSION", "default")
+    WAHA_WEBHOOK_SECRET = os.getenv("WAHA_WEBHOOK_SECRET")
+
     # Timezone used for displaying timestamps in the admin UI.
     # Set to any IANA timezone string, e.g. "Asia/Riyadh", "Europe/Istanbul".
     # Defaults to UTC so stored values are always valid even without this setting.
-    DISPLAY_TIMEZONE = os.getenv("DISPLAY_TIMEZONE", "UTC")
+    DISPLAY_TIMEZONE = os.getenv("DISPLAY_TIMEZONE", "UTC")

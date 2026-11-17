@@ -66,7 +66,9 @@ INTENT_PROMPT = """
                   Rules:
 
                   1. product_search:
-                     The customer is asking about, interested in, or looking for a specific product.
+                     The customer is asking about, interested in, or looking for a SPECIFIC named product.
+                     The customer must mention a recognizable product name or model number.
+                     Do NOT use this intent if the customer mentions only a category (e.g. 'headphones', 'laptops').
 
                      Examples:
                      - "I am interested in Samsung Galaxy S24."
@@ -102,7 +104,14 @@ INTENT_PROMPT = """
                      - "I want to purchase one."
 
                   5. recommendation:
-                     The customer asks for recommendations or help choosing between products.
+                     The customer asks for recommendations, help choosing between products,
+                     OR is browsing by category/price/feature without naming a specific product.
+
+                     Examples:
+                     - "I want headphones with price below 1000."
+                     - "Show me laptops under $1500."
+                     - "What smartphones do you have?"
+                     - "Recommend me a good phone."
 
                   6. policy_question:
                      Questions about returns, shipping, warranty, payment, etc.
