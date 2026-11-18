@@ -6,6 +6,7 @@ from app.rag import get_embedding_service, ChromaVectorStore, KnowledgeRetriever
 from app.services import ProductService
 
 from pydantic import BaseModel, Field
+import re
 
 
 class ProductRequest(BaseModel):
@@ -19,6 +20,16 @@ class ProductRequest(BaseModel):
                                 gt=0,
                                 description="The requested quantity."
                             )
+
+
+class ProductComparisonRequest(BaseModel):
+    product_names: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Names of the two or more distinct products explicitly present in the "
+            "conversation and being compared. Do not invent or add products."
+        ),
+    )
 
 
 class CategoryRequest(BaseModel):
@@ -71,6 +82,7 @@ def understand_request(state):
     allowed_intents = {
         "product_search",
         "product_question",
+        "product_comparison",
         "recommendation",
         "policy_question",
         "availability_check",
@@ -83,6 +95,71 @@ def understand_request(state):
         intent = "unknown"
 
     return {"intent": intent}
+
+# ---------------------------------Product Comparison--------------------------------------
+def extract_comparison_products(state):
+    """Extract only products already mentioned in the conversation."""
+    messages = state.get("messages", [])
+    conversation = format_conversation_history(messages)
+    prompt = f"""
+        The customer is asking to compare products mentioned earlier.
+        Extract the names of the distinct products that are actually present in the
+        conversation, especially product names in the Agent's most recent product list.
+
+        Rules:
+        - Return at least two products only when at least two are explicitly present.
+        - Copy product names as accurately as possible from the conversation.
+        - Do not invent, infer, or add products.
+        - Do not return generic category names.
+        - If fewer than two products can be identified, return an empty list.
+
+        Conversation:
+        {conversation}
+    """
+    result = get_llm().with_structured_output(ProductComparisonRequest).invoke(prompt)
+    names = []
+    seen = set()
+    for name in result.product_names:
+        cleaned = name.strip()
+        key = re.sub(r"[^a-z0-9]+", "", cleaned.lower())
+        if cleaned and key and key not in seen:
+            names.append(cleaned)
+            seen.add(key)
+    return {"comparison_product_names": names}
+
+
+def fetch_comparison_products(state):
+    """Resolve extracted names against active DB products and return authoritative facts."""
+    names = state.get("comparison_product_names") or []
+    if len(names) < 2:
+        return {"error": "I couldn't identify the products to compare. Please send their names again."}
+
+    resolved = []
+    used_ids = set()
+    for name in names[:5]:
+        match_result = ProductService.match_product(query=name)
+        product = match_result.get("product") if match_result.get("success") else None
+
+        if product is None or product.id in used_ids:
+            return {
+                "error": f"I couldn't confidently match '{name}' to a unique product in the catalog. Please confirm the product names."
+            }
+
+        used_ids.add(product.id)
+        resolved.append({
+            "product_id": product.id,
+            "product_name": product.name,
+            "description": product.description,
+            "category": product.category,
+            "price": f"${product.price:.2f}",
+            "is_available": product.stock_quantity > 0,
+        })
+
+    if len(resolved) < 2:
+        return {"error": "Please mention at least two products that you want to compare."}
+
+    return {"comparison_products": resolved}
+
 
 #----------------------------------Tool Input Preparation Node--------------------------------------
 def prepare_tool_input(state):
@@ -128,6 +205,12 @@ def prepare_tool_input(state):
             return {
                 "tool_input": {},
                 "error": "Please specify the quantity.",
+            }
+
+        if not customer_id:
+            return {
+                "tool_input": {},
+                "error": "Customer identification is missing. Please provide your customer details.",
             }
 
         return {
@@ -186,6 +269,9 @@ def retrieve_context(state):
 # ---------------------------------Decision Node--------------------------------------
 def agent_decision(state):
     intent = state.get("intent")
+
+    if intent == "product_comparison":
+        return {"tool_name": None}
 
     if intent == "availability_check":
         tool_name = "check_product_availability"
@@ -254,6 +340,33 @@ def generate_response(state):
         return {
             "response": f"I couldn't complete that request: {tool_error}",
         }
+
+    comparison_products = state.get("comparison_products") or []
+    if comparison_products:
+        comparison_prompt = f"""
+            {SYSTEM_PROMPT}
+
+            The customer asked to compare products. Compare ONLY the products and facts
+            in the authoritative database data below. Explain the practical differences
+            using available descriptions, categories, prices, and availability status.
+            Never reveal exact inventory counts or the stock_quantity field.
+            If a product is in stock, say it is available to order; otherwise say it is
+            currently unavailable.
+            Do not invent technical specifications or features. If a useful specification
+            is missing, explicitly say it is not available in the store data.
+            Do not claim one is better unless the supplied data supports that conclusion.
+            Answer in the same language as the customer's latest message.
+            Keep the comparison clear and easy to read, preferably one short section per product
+            followed by a concise recommendation only if supported by the data.
+
+            AUTHORITATIVE PRODUCT DATA:
+            {comparison_products}
+
+            Conversation:
+            {format_conversation_history(messages)}
+        """
+        response = get_llm().invoke(comparison_prompt)
+        return {"response": response.content}
 
     context_text = "\n\n".join(
         item["content"] for item in retrieved_context
@@ -378,41 +491,19 @@ def resolve_product(state):
             "error": "Product name could not be identified."
         }
 
-    # Stage 1: exact ILIKE search
-    products = ProductService.search_products(query=product_name)
+    match_result = ProductService.match_product(query=product_name)
 
-    print("MATCHED PRODUCTS (exact):", [
-        (product.id, product.name) for product in products
-    ])
+    print("PRODUCT MATCH RESULT:", {
+        "query": product_name,
+        "match_type": match_result.get("match_type"),
+        "product_id": match_result.get("product_id"),
+        "is_ambiguous": match_result.get("is_ambiguous"),
+        "error": match_result.get("error"),
+    })
 
-    if len(products) == 1:
-        return {"product_id": products[0].id}
+    if match_result.get("success") and match_result.get("product_id"):
+        return {"product_id": match_result["product_id"]}
 
-    # Stage 2: fuzzy fallback when ILIKE returned nothing (typos, misspellings)
-    if not products:
-        fuzzy_matches = ProductService.fuzzy_search_products(query=product_name)
-
-        print("FUZZY MATCHES:", [
-            (p.name, score) for p, score in fuzzy_matches
-        ])
-
-        if len(fuzzy_matches) == 1:
-            # Single confident match — use it
-            return {"product_id": fuzzy_matches[0][0].id}
-
-        if len(fuzzy_matches) > 1:
-            # Multiple close candidates — ask the customer to clarify
-            options = ", ".join(p.name for p, _ in fuzzy_matches[:3])
-            return {
-                "error": f"Did you mean one of these? {options}"
-            }
-
-        # Nothing found even with fuzzy
-        return {
-            "error": f"Product '{product_name}' was not found."
-        }
-
-    # Stage 1 returned multiple results
     return {
-        "error": "Multiple products matched the request. Please be more specific."
-    }
+        "error": match_result.get("error", f"Product '{product_name}' was not found.")
+    }

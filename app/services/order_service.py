@@ -26,7 +26,8 @@ class OrderService:
                 "error": "Customer not found.",
             }
 
-        product = db.session.get(Product, product_id)
+        # Acquire row-level lock on Product to prevent race conditions during concurrent orders
+        product = db.session.get(Product, product_id, with_for_update=True)
 
         if not product or not product.is_active:
             return {

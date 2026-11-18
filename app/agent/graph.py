@@ -10,11 +10,16 @@ from app.agent.nodes import (
     prepare_tool_input,
     execute_tool,
     generate_response,
+    extract_comparison_products,
+    fetch_comparison_products,
 )
 
 
 def route_after_decision(state):
     tool_name = state.get("tool_name")
+
+    if state.get("intent") == "product_comparison":
+        return "extract_comparison_products"
 
     if tool_name == "get_best_sellers":
         return "extract_category"
@@ -52,6 +57,8 @@ def build_graph():
     graph.add_node("prepare_tool_input", prepare_tool_input)
     graph.add_node("execute_tool", execute_tool)
     graph.add_node("generate_response", generate_response)
+    graph.add_node("extract_comparison_products", extract_comparison_products)
+    graph.add_node("fetch_comparison_products", fetch_comparison_products)
 
     # 2. Define edges
     graph.add_edge(START, "understand_request")
@@ -64,9 +71,15 @@ def build_graph():
         {
             "extract_product_request": "extract_product_request",
             "extract_category": "extract_category",
+            "extract_comparison_products": "extract_comparison_products",
             "generate_response": "generate_response",
         },
     )
+
+    # Comparison path: extract names from conversation, resolve each against DB,
+    # then generate a grounded comparison without requiring a single product_id.
+    graph.add_edge("extract_comparison_products", "fetch_comparison_products")
+    graph.add_edge("fetch_comparison_products", "generate_response")
 
     # Recommendation path: extract_category → prepare_tool_input → execute_tool
     graph.add_edge("extract_category", "prepare_tool_input")
@@ -97,4 +110,4 @@ def build_graph():
     return graph.compile()
 
 
-agent_graph = build_graph()
+agent_graph = build_graph()

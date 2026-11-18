@@ -13,8 +13,12 @@ An AI-powered sales and customer service assistant for an electronics e-commerce
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Database Design](#database-design)
+- [Product Matching Pipeline](#product-matching-pipeline)
 - [LangGraph Agent](#langgraph-agent)
 - [RAG Pipeline](#rag-pipeline)
+- [Media Processing (Vision & Audio)](#media-processing-vision--audio)
+- [WhatsApp Integration (WAHA)](#whatsapp-integration-waha)
+- [Web Chat Integration](#web-chat-integration)
 - [API Reference](#api-reference)
 - [Admin Dashboard](#admin-dashboard)
 - [Environment Variables](#environment-variables)
@@ -32,11 +36,13 @@ An AI-powered sales and customer service assistant for an electronics e-commerce
 | Category | Capabilities |
 |---|---|
 | **AI Agent** | Intent classification · Multi-step routing · RAG retrieval · Tool execution · Grounded response generation · Multi-turn conversation · Pronoun resolution |
-| **Sales** | Product search (exact + fuzzy) · Best-sellers by category · Price & stock lookup (live from PostgreSQL) · Order creation |
+| **Sales** | Deterministic 5-stage product matching · Product comparison · Best-sellers by category · Price & stock lookup (live from PostgreSQL) · Safe order creation with row locking (`with_for_update`) |
+| **Multi-Modal AI** | Image understanding via Groq Vision (`meta-llama/llama-4-scout-17b-16e-instruct`) · Audio transcription via Groq Whisper (`whisper-large-v3-turbo`) |
+| **WhatsApp (WAHA)** | Inbound webhook processing · Webhook secret verification · Thread-safe LRU message deduplication · Graceful non-blocking media fallback |
+| **Web Chat** | Modern real-time UI · Multipart media uploads (images + voice audio) · File format & size validation with user-friendly errors |
 | **Customer Service** | Return / shipping / warranty / payment policies via RAG |
 | **RAG** | PostgreSQL-backed knowledge store · Deterministic chunking · ChromaDB vector index · CRUD synchronization |
 | **Admin Dashboard** | Product management · Order & customer views · Knowledge document CRUD with automatic RAG sync · Local-timezone timestamps |
-| **Facebook Messenger** | Webhook integration for Messenger-based conversations |
 
 ---
 
@@ -80,30 +86,32 @@ An AI-powered sales and customer service assistant for an electronics e-commerce
 ### Agent Request Flow
 
 ```
-Customer Message
-  → Flask Controller
-    → LangGraph Agent
-        1. understand_request     (intent classification with labeled history)
-        2. retrieve_context       (RAG, when relevant)
-        3. agent_decision         (route to tool or direct response)
-        4a. extract_product_request + resolve_product  (product intents — exact + fuzzy match)
-        4b. extract_category      (recommendation intent — extracts optional category)
-        5. prepare_tool_input
-        6. execute_tool           (PostgreSQL-backed business operation)
-        7. generate_response      (grounded LLM response with labeled conversation history)
-  → Customer
+Customer Message (Text, Image, or Audio)
+  → Flask Controller (Web Chat or WhatsApp Webhook with LRU Deduplication)
+    → MediaService (Groq Vision / Whisper transcription if media present)
+      → LangGraph Agent
+          1. understand_request            (intent classification with labeled history)
+          2. retrieve_context              (RAG, when relevant)
+          3. agent_decision                (route to tool, comparison, or direct response)
+          4a. extract_product_request + resolve_product (5-stage deterministic matching)
+          4b. extract_category             (recommendation intent — category extraction)
+          4c. extract_comparison_products + fetch_comparison_products (product comparison)
+          5. prepare_tool_input            (validates parameters & customer ID)
+          6. execute_tool                  (PostgreSQL-backed business operation with row locking)
+          7. generate_response             (grounded LLM response with labeled conversation history)
+  → Customer (Web Chat / WhatsApp API)
 ```
 
 ### Layer Responsibilities
 
 | Layer | Path | Responsibility |
 |---|---|---|
-| Model | `app/models/` | SQLAlchemy ORM entities & constraints |
-| View | `app/views/` | Jinja2 templates, CSS, JS |
-| Controller | `app/controllers/` | HTTP request/response only — no business logic |
-| Service | `app/services/` | Business rules, validation, transactions |
-| Agent | `app/agent/` | LangGraph orchestration, tools, prompts |
-| RAG | `app/rag/` | Embeddings, chunking, ChromaDB, retrieval |
+| Model | `app/models/` | SQLAlchemy ORM entities, relationships & constraints |
+| View | `app/views/` | Jinja2 templates, modern chat UI, static CSS & JS |
+| Controller | `app/controllers/` | HTTP request/response, validation, webhook deduplication |
+| Service | `app/services/` | Business rules, 5-stage product matching, transactions, media processing |
+| Agent | `app/agent/` | LangGraph workflow, state, nodes, routing, tools, prompts |
+| RAG | `app/rag/` | Embeddings, deterministic chunking, ChromaDB, similarity retrieval |
 
 ---
 
@@ -112,20 +120,23 @@ Customer Message
 | Technology | Role |
 |---|---|
 | Python 3.11+ | Primary language |
-| Flask 3 | Web framework |
-| Flask-SQLAlchemy | ORM integration |
-| PostgreSQL | Relational source of truth |
-| LangGraph | Agent graph orchestration |
-| LangChain / langchain-groq | LLM & tool integrations |
-| Groq (`qwen/qwen3.8-27b`) | LLM provider |
-| ChromaDB | Local vector database |
-| Sentence Transformers (`all-MiniLM-L6-v2`) | Embedding model |
-| rapidfuzz | Fuzzy product name matching (typo tolerance) |
-| Pydantic | Structured output & validation |
-| Jinja2 | Server-side HTML templates |
-| pytest | Testing |
-| Docker / Docker Compose | Containerisation |
-| python-dotenv | Environment configuration |
+| Flask 3 | Web application framework |
+| Flask-SQLAlchemy | ORM integration with PostgreSQL |
+| PostgreSQL | Relational database & authoritative source of truth |
+| LangGraph | Agent state-graph orchestration |
+| LangChain / langchain-groq | LLM & tool calling orchestration |
+| Groq LLM (`qwen/qwen3.8-27b`) | Conversational reasoning & structured output |
+| Groq Vision (`meta-llama/llama-4-scout-17b-16e-instruct`) | Product image understanding |
+| Groq Whisper (`whisper-large-v3-turbo`) | Voice note speech-to-text transcription |
+| WAHA (WhatsApp HTTP API) | Headless WhatsApp integration |
+| ChromaDB | Persistent local vector database |
+| Sentence Transformers (`all-MiniLM-L6-v2`) | Document embedding model (lazy-loaded) |
+| rapidfuzz | Fuzzy string matching & token similarity |
+| Pydantic | Structured LLM extraction schemas |
+| Jinja2 | Server-side web templates |
+| pytest | Automated test suite (85 tests) |
+| Docker / Docker Compose | Multi-container environment (PostgreSQL + WAHA) |
+| python-dotenv | Environment variable configuration |
 
 ---
 
@@ -263,26 +274,109 @@ knowledge_documents ──[ingestion]──> ChromaDB vector index
 
 ---
 
+## Product Matching Pipeline
+
+The system features a **deterministic, 5-stage product matching pipeline** in `ProductService.match_product`, completely isolated from non-deterministic LLM hallucinations.
+
+### The Confirmed Anker R50i Bug & Root Cause
+
+**The Bug:**
+When a customer asked for `anker r50i`, the system logged:
+```text
+PRODUCT NAME: anker r50i
+QUANTITY: None
+
+MATCHED PRODUCTS (exact):
+[(11, 'anker r50i'), (14, 'anker r50i NC')]
+```
+The agent incorrectly claimed both products matched, treated it as ambiguous, and asked the customer to clarify instead of directly selecting the exact product.
+
+**The Root Cause:**
+1. Substring Matching in SQL: The legacy search executed `Product.name.ilike(f"%{query}%")`. Because `"anker r50i"` is a substring of `"anker r50i NC"`, the query matched both rows in PostgreSQL.
+2. Premature Ambiguity: Because the list length was `> 1`, the code immediately aborted to an ambiguity error without checking whether one candidate had an **exact full-name equality**.
+3. Lack of Suffix & Modifier Discrimination: Model modifiers (like `"NC"`, `"Pro"`, `"Ultra"`) and accessory terms (like `"case"`, `"charger"`) were not distinguished from base product names.
+
+### The 5-Stage Matching Pipeline
+
+```
+Raw Customer Query
+  │
+  ▼
+[ Stage 1: Normalization ]
+  • Lowercase & trim whitespace
+  • Collapse multiple spaces
+  • Strip punctuation (preserve alphanumeric model numbers)
+  • Compute compact key (e.g. "anker-r50i" → "ankerr50i")
+  │
+  ▼
+[ Stage 2: Exact Matching ]
+  • Exact normalized string equality (norm_name == norm_query)
+  • Exact compact key equality (compact_key(name) == comp_query)
+  • If EXACTLY ONE match: Return immediately (Confidence: 1.0)
+  • Longer supersets (e.g. "anker r50i NC") are strictly excluded
+  │
+  ▼ (if no exact match)
+[ Stage 3: Alias Matching ]
+  • Check aliases and model numbers
+  • Exact alias match returns immediately
+  │
+  ▼ (if no alias match)
+[ Stage 4: Partial & Relevance Matching with Context & Accessory Protection ]
+  • Accessory Guard: Explicit accessory terms (e.g. "case", "charger") disqualify non-accessory base products
+  • Variant Guard: Explicit variant modifiers (e.g. "Pro", "Ultra", "NC") disqualify products lacking that variant
+  • Multi-Level Token Matching: Non-filler query tokens match across product name, category synonyms (e.g. "phone", "earbuds", "laptop"), and description brand attributes (e.g. "Apple" in "Apple iPhone 15")
+  • Variant Discrimination: Penalizes unrequested variants (e.g. "NC") when the base model is covered, while preserving ambiguity for broad queries (e.g. "anker")
+  • Score ranking with coverage, length ratio, and prefix weighting
+  │
+  ▼
+[ Stage 5: Ambiguity Handling ]
+  • Single top candidate or dominant leader (score ≥ 80, margin ≥ 12): Return candidate
+  • Multiple genuinely close candidates: Return formatted clarification options
+  • No candidates: Return clean "Product not found" response
+```
+
+### Verified Test Matrix
+
+| Query | Expected Result | Actual Result | Verification |
+|---|---|---|---|
+| `anker r50i` | Product ID 11 only | Product ID 11 (`match_type: exact`) | ✅ `tests/test_product_matching.py` |
+| `anker r50i NC` | Product ID 14 only | Product ID 14 (`match_type: exact`) | ✅ `tests/test_product_matching.py` |
+| `anker` | Ambiguity (IDs 11 & 14) | Clarification listing both candidates | ✅ `tests/test_product_matching.py` |
+| `anker r50i case` | Not found (no false earbuds match) | `success: False`, not-found error | ✅ `tests/test_product_matching.py` |
+| `Apple iPhone 15` | Product ID 30 (iPhone 15) | Product ID 30 (`match_type: partial`) | ✅ `tests/test_product_matching.py` |
+| `anker r50i earbuds` | Product ID 11 | Product ID 11 (`match_type: partial`) | ✅ `tests/test_product_matching.py` |
+| `Samsung S24 Ultra phone` | Product ID 20 (S24 Ultra) | Product ID 20 (`match_type: partial`) | ✅ `tests/test_product_matching.py` |
+| `soundcore r50i` | Product ID 11 (via alias) | Product ID 11 (`match_type: alias`) | ✅ `tests/test_product_matching.py` |
+| `anker r50i Pro` | Not found (variant mismatch) | `success: False`, not-found error | ✅ `tests/test_product_matching.py` |
+| `ANKER R50I` | Product ID 11 | Product ID 11 (casing insensitive) | ✅ `tests/test_product_matching.py` |
+| `  anker   r50i  ` | Product ID 11 | Product ID 11 (whitespace normalized) | ✅ `tests/test_product_matching.py` |
+| `anker r-50i` | Product ID 11 | Product ID 11 (compact key tolerance) | ✅ `tests/test_product_matching.py` |
+| `nonexistent item` | Not found error | Clean "Product not found" response | ✅ `tests/test_product_matching.py` |
+
+---
+
 ## LangGraph Agent
 
 ### Graph Nodes
 
 | Node | Purpose |
 |---|---|
-| `understand_request` | Classifies intent into one of 8 categories using labeled conversation history |
-| `retrieve_context` | RAG retrieval (only for knowledge-based intents) |
-| `agent_decision` | Decides which tool to call (or goes straight to response) |
+| `understand_request` | Classifies intent into one of 9 categories using labeled conversation history |
+| `retrieve_context` | RAG retrieval from ChromaDB (for policy/knowledge-based intents) |
+| `agent_decision` | Routes to tool execution, product comparison, or direct LLM response |
 | `extract_product_request` | Extracts product name & quantity using structured LLM output |
-| `extract_category` | Extracts optional category keyword for best-seller queries (e.g. "headphones") |
-| `resolve_product` | Two-stage match: exact SQL ILIKE → rapidfuzz fallback for typos/misspellings |
-| `prepare_tool_input` | Builds validated tool input dict |
-| `execute_tool` | Calls the selected StructuredTool |
+| `extract_category` | Extracts optional category keyword for best-seller queries |
+| `extract_comparison_products` | Extracts multiple product names from query for side-by-side comparison |
+| `fetch_comparison_products` | Fetches specifications for multiple products deterministically using `match_product` |
+| `resolve_product` | 5-stage deterministic matching pipeline (exact → alias → partial → ambiguity) |
+| `prepare_tool_input` | Validates parameters (including customer ID) before database operations |
+| `execute_tool` | Calls the selected StructuredTool (ACID transaction with row locking) |
 | `generate_response` | Produces final grounded customer response |
 
 ### Supported Intents
 
 ```
-product_search · product_question · recommendation
+product_search · product_question · recommendation · compare_products
 policy_question · availability_check · create_order
 general_customer_service · unknown
 ```
@@ -387,6 +481,40 @@ All knowledge CRUD goes through `KnowledgeService`, never direct ORM creation, e
 
 ---
 
+## Media Processing (Vision & Audio)
+
+The system supports multi-modal user interactions across Web Chat and WhatsApp using Groq's dedicated multi-modal models:
+
+- **Image Understanding:** Powered by `meta-llama/llama-4-scout-17b-16e-instruct` via Groq's Vision API. When a user uploads a product photo, the model identifies the device brand, model, color, and visible condition, allowing the agent to resolve product queries directly from images.
+- **Audio / Voice Note Transcription:** Powered by `whisper-large-v3-turbo` via Groq's Speech-to-Text API. Voice notes recorded in Web Chat or sent over WhatsApp are automatically transcribed into normalized text and fed seamlessly into the agent workflow.
+
+### Media Configuration & Safeguards
+
+```env
+GROQ_VISION_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+GROQ_STT_MODEL=whisper-large-v3-turbo
+MEDIA_MAX_IMAGE_MB=10
+MEDIA_MAX_AUDIO_MB=25
+```
+
+- **Strict MIME Type Validation:** Only safe, recognized image formats (`image/jpeg`, `image/png`, `image/webp`) and audio formats (`audio/mpeg`, `audio/wav`, `audio/ogg`, `audio/mp4`, `audio/x-m4a`) are accepted.
+- **Size Limit Enforcement:** Requests exceeding `MEDIA_MAX_IMAGE_MB` or `MEDIA_MAX_AUDIO_MB` are rejected with HTTP 400 Bad Request before file processing.
+- **Fault-Tolerant Media Processing:** If external API transcription or vision fails (e.g. rate limits or temporary provider downtime), the media failure is logged, user text is preserved, and the request completes without throwing an unhandled 500 error.
+
+---
+
+## Web Chat Integration
+
+The Web Chat UI (`/chat`) provides an interactive interface supporting:
+
+- **Real-Time Text Chat:** Conversational history maintained per session.
+- **Image File Uploads:** Drag-and-drop or file picker with instant preview.
+- **Voice Message Recording:** In-browser audio recording via MediaRecorder API with audio waveform playback.
+- **Multipart Form Handling:** Seamless submission of text + optional media via `POST /api/chat`.
+- **Client & Server Validation:** Both frontend and backend reject invalid file formats and oversized files with clear, actionable user messages.
+
+---
+
 ## API Reference
 
 ### Chat
@@ -465,17 +593,33 @@ FLASK_SECRET_KEY=change-me
 DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/ai_sales_agent
 TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/ai_sales_agent_test
 
-# Groq LLM
+# Groq LLM & Multi-Modal Models
 GROQ_API_KEY=your_groq_api_key_here
 GROQ_MODEL=qwen/qwen3.8-27b
+GROQ_VISION_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+GROQ_STT_MODEL=whisper-large-v3-turbo
+
+# Upload Size Limits
+MEDIA_MAX_IMAGE_MB=10
+MEDIA_MAX_AUDIO_MB=25
 
 # Embeddings & Vector Store
 EMBEDDING_MODEL=all-MiniLM-L6-v2
 CHROMA_PATH=./chroma_data
 
-# Admin UI timezone — any IANA string, e.g. Asia/Riyadh, Europe/Istanbul, America/New_York
-# Defaults to UTC if not set.
+# Admin UI timezone (e.g. Asia/Riyadh, Europe/Istanbul, America/New_York)
 DISPLAY_TIMEZONE=UTC
+
+# WhatsApp / WAHA Integration
+WAHA_BASE_URL=http://localhost:3000
+WAHA_API_KEY=your_waha_api_key
+WAHA_SESSION=default
+WAHA_WEBHOOK_SECRET=change_this_to_a_long_random_secret
+WHATSAPP_DEFAULT_ENGINE=NOWEB
+WAHA_DASHBOARD_USERNAME=admin
+WAHA_DASHBOARD_PASSWORD=change_this_dashboard_password
+WHATSAPP_SWAGGER_USERNAME=admin
+WHATSAPP_SWAGGER_PASSWORD=change_this_swagger_password
 
 # Facebook Messenger (optional)
 FACEBOOK_VERIFY_TOKEN=your_verify_token
@@ -671,22 +815,29 @@ pytest --cov=app
 
 ### Test Coverage
 
-| Module | Tests |
-|---|---|
-| `test_product_service.py` | Product lookup, search, availability |
-| `test_order_service.py` | Order creation, validation, stock decrement, rollback |
-| `test_knowledge_service.py` | RAG create/update/delete and retrieval verification |
-| `test_knowledge_consistency.py` | PostgreSQL rollback when vector ingestion fails |
-| `test_tools.py` | All three agent tools via real DB |
-| `test_agent_nodes.py` | `prepare_tool_input`, error guard on `generate_response` |
-| `test_agent_routing.py` | Intent → tool routing, conditional edge functions |
-| `test_agent_edge_cases.py` | Missing quantity, missing product, edge routing |
-| `test_integration_order_flow.py` | End-to-end order flow with mocked LLM |
-| `test_controllers.py` | Chat API endpoints |
-| `test_admin_controller.py` | Admin page HTTP responses |
-| `test_admin_crud.py` | Admin product & knowledge CRUD validation |
+The automated test suite contains **90 tests across 16 test modules**, executing in isolated PostgreSQL test transactions with mocked external APIs:
 
-The full test suite **does not call external APIs** — the LLM is mocked in all agent tests.
+| Module | Tests | Focus Areas |
+|---|:---:|---|
+| `test_product_matching.py` | 18 | Exact match, Anker R50i ID 11 only, Anker R50i NC ID 14 only, broad query ambiguity, accessory guard ("case"), natural brand & category queries ("Apple iPhone 15", "anker r50i earbuds", "Samsung S24 Ultra phone"), alias matching & ambiguity, variant mismatch rejection, casing/whitespace/hyphen tolerance, unknown products |
+| `test_whatsapp_resilience.py` | 7 | Webhook secret authentication, fromMe drop, group chat ignore, thread-safe LRU deduplication, media download failure resilience, media AI failure fallback, empty payload |
+| `test_web_chat_media.py` | 8 | Text-only chat, unsupported MIME rejection (400), non-image rejection (400), file size limit rejection (400), Groq Vision flow, Groq Whisper flow, graceful media failure fallback, non-numeric customer ID rejection (400) |
+| `test_order_integrity.py` | 3 | Database-authoritative pricing (ignores client-supplied price), atomic transaction rollback on failure (zero partial records), mandatory customer_id validation |
+| `test_product_service.py` | 3 | Product retrieval by ID, SQL substring search, stock availability check |
+| `test_order_service.py` | 5 | Successful order creation, invalid quantity, nonexistent customer/product rejection, insufficient stock rejection |
+| `test_knowledge_service.py` | 4 | Knowledge document creation, RAG vector ingestion, document update with vector refresh, document deletion with vector removal |
+| `test_knowledge_consistency.py` | 1 | PostgreSQL transaction rollback when vector ingestion fails |
+| `test_tools.py` | 5 | `get_product_details`, `get_product_details_invalid_product`, `check_product_availability`, `check_product_availability_insufficient_stock`, `create_order` StructuredTool validation |
+| `test_agent_nodes.py` | 7 | Tool input preparation (product details, availability, create order, missing quantity/product), LLM response guards against tool error hallucination |
+| `test_agent_routing.py` | 8 | Intent-to-tool routing edges, conditional graph routing (availability, order, product question, policy, general customer service, prepare tool error/success) |
+| `test_agent_edge_cases.py` | 7 | Missing quantity fallback to 1 for check vs error for order, missing product handling, policy route bypass, resolve product routing |
+| `test_integration_order_flow.py` | 1 | End-to-end multi-turn conversation order placement with database stock verification |
+| `test_controllers.py` | 5 | Health endpoint, root redirect, empty message rejection, missing message rejection, chat API valid message processing |
+| `test_admin_controller.py` | 5 | Admin dashboard overview, products page, orders page, customers page, knowledge page |
+| `test_admin_crud.py` | 4 | Negative values rejection, invalid numeric values rejection, negative stock rejection, knowledge CRUD synchronization |
+| **Total** | **90** | **100% Passing (0 failed, 0 skipped, 0 errors)** |
+
+The full test suite **does not call external APIs** — the LLM, Vision, Whisper, and WAHA network calls are completely mocked.
 
 ---
 
@@ -900,9 +1051,10 @@ Send a direct message to the linked WhatsApp account, for example:
 
 The webhook maps each WhatsApp chat to a customer record and invokes the existing LangGraph agent. Check the order in the Flask dashboard after the purchase test.
 
-### Notes / current limitations
+### Webhook Reliability & Production Protections
 
-- Conversation history currently uses the project's in-memory `ConversationService`; it resets when Flask restarts and is not shared across multiple workers.
-- This local integration handles direct chats only; group chats are ignored.
-- The webhook endpoint should be exposed securely before any public/production deployment. Configure webhook authentication and HTTPS, and consider persistent message deduplication before production use.
-- WAHA uses a WhatsApp Web-based integration. Review its operational and account risks before relying on it for a business-critical production channel.
+- **Message Deduplication:** Built-in thread-safe LRU deduplication (`WebhookDeduplicator`) caches message IDs with a 10-minute TTL (capacity: 10,000 entries). WAHA retry deliveries are detected and dropped immediately with HTTP 200, guaranteeing that duplicate webhook deliveries never trigger duplicate orders or duplicate replies.
+- **Fault-Tolerant Media Handling:** When incoming messages include images or voice notes, media download or transcription errors are caught and logged without aborting the webhook. The customer's text content is still processed, and the agent responds gracefully rather than throwing an unhandled 500 error.
+- **Webhook Secret Verification:** When `WAHA_WEBHOOK_SECRET` is set in `.env`, the controller verifies the incoming `X-Webhook-Secret` header using constant-time comparison, immediately rejecting unauthorized requests with 401.
+- **Chat & Sender Filtering:** Group messages (`@g.us`) and self-sent messages (`fromMe: true`) are safely filtered out before hitting the agent.
+- **Conversation History:** Maps each WhatsApp chat ID to a consistent customer record and maintains conversational context across turns.

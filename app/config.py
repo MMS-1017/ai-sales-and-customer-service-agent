@@ -37,6 +37,12 @@ class Config:
     WAHA_SESSION = os.getenv("WAHA_SESSION", "default")
     WAHA_WEBHOOK_SECRET = os.getenv("WAHA_WEBHOOK_SECRET")
 
+    # Media processing (Groq API; configurable independently from the chat model)
+    GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+    GROQ_STT_MODEL = os.getenv("GROQ_STT_MODEL", "whisper-large-v3-turbo")
+    MEDIA_MAX_IMAGE_MB = int(os.getenv("MEDIA_MAX_IMAGE_MB", "10"))
+    MEDIA_MAX_AUDIO_MB = int(os.getenv("MEDIA_MAX_AUDIO_MB", "25"))
+
     # Timezone used for displaying timestamps in the admin UI.
     # Set to any IANA timezone string, e.g. "Asia/Riyadh", "Europe/Istanbul".
     # Defaults to UTC so stored values are always valid even without this setting.

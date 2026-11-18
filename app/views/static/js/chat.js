@@ -2,6 +2,7 @@ const chatForm = document.getElementById("chat-form");
 const messageInput = document.getElementById("message-input");
 const chatMessages = document.getElementById("chat-messages");
 const sendButton = document.getElementById("send-button");
+const mediaInput = document.getElementById("media-input");
 const conversationId = crypto.randomUUID();
 
 const CUSTOMER_ID = 1;
@@ -42,27 +43,23 @@ chatForm.addEventListener("submit", async (event) => {
 
     const message = messageInput.value.trim();
 
-    if (!message) {
-        return;
-    }
+    const file = mediaInput.files[0];
+    if (!message && !file) return;
 
-    addMessage(message, "user");
-
+    addMessage(message || (file ? `Uploaded: ${file.name}` : ""), "user");
     messageInput.value = "";
-
     setLoading(true);
 
     try {
+        const formData = new FormData();
+        formData.append("message", message);
+        formData.append("customer_id", CUSTOMER_ID);
+        formData.append("conversation_id", conversationId);
+        if (file) formData.append("file", file);
+
         const response = await fetch("/api/chat", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                message: message,
-                customer_id: 1,
-                conversation_id: conversationId
-            })
+            body: formData
         });
 
         const data = await response.json();
@@ -72,6 +69,7 @@ chatForm.addEventListener("submit", async (event) => {
         }
 
         addMessage(data.response, "assistant");
+        mediaInput.value = "";
 
     } catch (error) {
         addMessage(

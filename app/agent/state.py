@@ -11,6 +11,8 @@ class AgentState(TypedDict, total=False):
     category: str | None
     quantity: int | None
     product_id: int | None
+    comparison_product_names: list[str] | None
+    comparison_products: list[dict] | None
 
     tool_name: str | None
     tool_input: dict | None

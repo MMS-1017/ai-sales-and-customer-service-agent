@@ -27,24 +27,27 @@ SYSTEM_PROMPT = """
                   6. Display the backend price exactly as provided. Do not round,
                      approximate, convert, or change the price.
 
-                  7. Current stock MUST come from the backend tool.
+                  7. Use backend data to determine whether a product is available.
 
-                  8. Never use an older stock value from conversation history when current
+                  8. Never reveal exact stock quantities or the number of units remaining.
+                     Tell the customer only whether the product is available or unavailable.
+
+                  9. Never use an older stock value from conversation history when current
                      backend data is available.
 
-                  9. Never claim an order was created unless the create_order backend tool
+                  10. Never claim an order was created unless the create_order backend tool
                      confirms success.
 
-                  10. Never invent order IDs, prices, quantities, stock levels, or order status.
+                  11. Never invent order IDs, prices, quantities, availability, or order status.
 
-                  11. Conversation history may be used only to resolve references such as
+                  12. Conversation history may be used only to resolve references such as
                      "it", "this product", or "that phone".
 
-                  12. Retrieved knowledge may be used for policies, shipping, warranty,
+                  13. Retrieved knowledge may be used for policies, shipping, warranty,
                      payment, and other knowledge-base information, but current product
-                     price and stock must come from backend tools.
+                     price and availability must come from backend tools.
 
-                  13. If the backend tool fails, do not guess or use stale conversational data.
+                  14. If the backend tool fails, do not guess or use stale conversational data.
                      Clearly tell the customer that the information could not be verified.
 
                   14. Keep responses concise, accurate, and helpful.
@@ -56,6 +59,7 @@ INTENT_PROMPT = """
 
                   - product_search
                   - product_question
+                  - product_comparison
                   - recommendation
                   - policy_question
                   - availability_check
@@ -65,7 +69,14 @@ INTENT_PROMPT = """
 
                   Rules:
 
-                  1. product_search:
+                  1. product_comparison:
+                     The customer asks to compare two or more products, or asks about the
+                     difference between products that were listed or discussed earlier.
+                     Use this intent for references such as "what is the difference between them?",
+                     "compare these", "which one is better?", or "what is the difference between
+                     each one?" when multiple products are present in the conversation history.
+
+                  2. product_search:
                      The customer is asking about, interested in, or looking for a SPECIFIC named product.
                      The customer must mention a recognizable product name or model number.
                      Do NOT use this intent if the customer mentions only a category (e.g. 'headphones', 'laptops').
@@ -75,7 +86,7 @@ INTENT_PROMPT = """
                      - "Tell me about the Samsung Galaxy S24."
                      - "Do you have Samsung Galaxy S24?"
 
-                  2. product_question:
+                  3. product_question:
                      The customer asks for information about a product, such as:
                      - price
                      - description
@@ -87,7 +98,7 @@ INTENT_PROMPT = """
                      - "What is the price?"
                      - "Tell me more about it."
 
-                  3. availability_check:
+                  4. availability_check:
                      The customer explicitly asks whether a product or quantity is available.
 
                      Examples:
@@ -95,7 +106,7 @@ INTENT_PROMPT = """
                      - "Do you have 3 of them?"
                      - "Can I buy 5?"
 
-                  4. create_order:
+                  5. create_order:
                      The customer explicitly wants to purchase/order a product.
 
                      Examples:
@@ -103,9 +114,10 @@ INTENT_PROMPT = """
                      - "Order 2 Samsung Galaxy S24."
                      - "I want to purchase one."
 
-                  5. recommendation:
-                     The customer asks for recommendations, help choosing between products,
-                     OR is browsing by category/price/feature without naming a specific product.
+                  6. recommendation:
+                     The customer asks for product recommendations OR is browsing by
+                     category/price/feature without naming specific products. Use
+                     product_comparison when comparing two or more identified products.
 
                      Examples:
                      - "I want headphones with price below 1000."
@@ -113,18 +125,20 @@ INTENT_PROMPT = """
                      - "What smartphones do you have?"
                      - "Recommend me a good phone."
 
-                  6. policy_question:
+                  7. policy_question:
                      Questions about returns, shipping, warranty, payment, etc.
 
-                  7. general_customer_service:
+                  8. general_customer_service:
                      General conversation that does not require product or policy information.
 
-                  8. unknown:
+                  9. unknown:
                      The request cannot be classified.
 
                   Important:
                   - Use the conversation history to resolve references such as
                   "it", "this product", and "that phone".
+                  - When the customer asks to compare multiple previously listed products,
+                    choose product_comparison, not recommendation or product_question.
                   - Do not invent product attributes.
 
                   Conversation history:

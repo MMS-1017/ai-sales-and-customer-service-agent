@@ -49,6 +49,7 @@ def get_product_details(product_id: int):
         "category": product.category,
         "price": f"${product.price:.2f}",
         "stock_quantity": product.stock_quantity,
+        "is_available": product.stock_quantity > 0,
         "is_active": product.is_active,
     }
 
@@ -86,6 +87,7 @@ def get_best_sellers(category: str | None = None, limit: int = 5):
             "category": product.category,
             "price": f"${product.price:.2f}",
             "stock_quantity": product.stock_quantity,
+            "is_available": product.stock_quantity > 0,
             "units_sold": int(units_sold),
         })
 
@@ -101,8 +103,8 @@ product_details_tool = StructuredTool.from_function(
     name="get_product_details",
     description=(
         "Get current product information including "
-        "name, description, category, price, and stock "
-        "from the database."
+        "name, description, category, price, and availability status "
+        "from the database. Never disclose exact inventory counts."
     ),
     args_schema=ProductDetailsInput,
 )

@@ -4,7 +4,7 @@ from datetime import timezone as _utc
 
 from app.config import Config
 from app.extensions import db
-from app.models import Customer, Product, Order, OrderItem, KnowledgeDocument
+from app.models import Customer, Product, Order, OrderItem, KnowledgeDocument, MediaFile
 from app.controllers.chat_controller import chat_bp
 from app.controllers.admin_controller import admin_bp
 from app.controllers.facebook_controller import facebook_bp
@@ -19,6 +19,7 @@ def create_app(test_config=None):
     )
 
     app.config.from_object(Config)
+    app.config.setdefault("MAX_CONTENT_LENGTH", 30 * 1024 * 1024)
 
     if test_config:
         app.config.update(test_config)
