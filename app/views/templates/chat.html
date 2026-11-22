@@ -40,13 +40,34 @@
                 autocomplete="off"
             >
 
-            <input type="file" id="media-input" accept="image/jpeg,image/png,image/webp,image/gif,audio/mpeg,audio/wav,audio/ogg,audio/webm,audio/mp4,audio/flac">
+            <!-- Attach File Button (Images & Audios) -->
+            <label for="media-input" class="media-attach-btn" title="Attach an image or audio file">
+                📎 <span class="attach-label">Attach</span>
+            </label>
+            <input 
+                type="file" 
+                id="media-input" 
+                accept="image/*,audio/*,.jpg,.jpeg,.png,.webp,.gif,.mp3,.wav,.ogg,.webm,.m4a"
+                style="display: none;"
+            >
+
+            <!-- Microphone Button for Voice Recording -->
+            <button type="button" id="record-btn" class="record-btn" title="Record voice audio">
+                🎙️ <span id="record-btn-text">Record</span>
+            </button>
 
             <button type="submit" id="send-button">
                 Send
             </button>
 
         </form>
+
+        <!-- Preview Tray for Selected or Recorded Media -->
+        <div id="media-preview-tray" class="media-preview-tray" style="display: none;">
+            <span id="preview-filename"></span>
+            <audio id="preview-audio" controls style="display: none; height: 30px;"></audio>
+            <button type="button" id="clear-media-btn" title="Remove attachment">✕</button>
+        </div>
 
     </div>
 

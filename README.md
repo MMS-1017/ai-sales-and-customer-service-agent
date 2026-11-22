@@ -16,9 +16,9 @@ An AI-powered sales and customer service assistant for an electronics e-commerce
 - [Product Matching Pipeline](#product-matching-pipeline)
 - [LangGraph Agent](#langgraph-agent)
 - [RAG Pipeline](#rag-pipeline)
-- [Media Processing (Vision & Audio)](#media-processing-vision--audio)
-- [WhatsApp Integration (WAHA)](#whatsapp-integration-waha)
+- [Media Processing (Vision, Audio & Local Storage)](#media-processing-vision-audio--local-storage)
 - [Web Chat Integration](#web-chat-integration)
+- [WhatsApp Integration (WAHA)](#whatsapp-integration-waha)
 - [API Reference](#api-reference)
 - [Admin Dashboard](#admin-dashboard)
 - [Environment Variables](#environment-variables)
@@ -28,6 +28,7 @@ An AI-powered sales and customer service assistant for an electronics e-commerce
 - [Example Conversations](#example-conversations)
 - [Design Decisions](#design-decisions)
 - [Limitations & Future Work](#limitations--future-work)
+- [Production Checklist](#production-checklist)
 
 ---
 
@@ -155,7 +156,8 @@ ai-sales-and-customer-service-agent/
 │   │   ├── product.py
 │   │   ├── order.py
 │   │   ├── order_item.py
-│   │   └── knowledge.py
+│   │   ├── knowledge.py
+│   │   └── media_file.py     # Stored image/audio metadata & local path
 │   │
 │   ├── views/
 │   │   ├── templates/        # Jinja2 HTML templates
@@ -164,11 +166,15 @@ ai-sales-and-customer-service-agent/
 │   ├── controllers/
 │   │   ├── chat_controller.py
 │   │   ├── admin_controller.py
+│   │   ├── media_controller.py    # Media retrieval & download endpoints
+│   │   ├── whatsapp_controller.py # WAHA WhatsApp webhook with deduplication
 │   │   └── facebook_controller.py
 │   │
 │   ├── services/
 │   │   ├── product_service.py
 │   │   ├── order_service.py
+│   │   ├── media_service.py      # Local byte storage & retrieval in original form
+│   │   ├── waha_service.py       # WAHA WhatsApp media download & messaging
 │   │   ├── knowledge_service.py  # Keeps PostgreSQL + ChromaDB in sync
 │   │   ├── conversation_service.py
 │   │   └── facebook_service.py
@@ -187,11 +193,17 @@ ai-sales-and-customer-service-agent/
 │       ├── retriever.py      # Similarity retrieval
 │       └── vectorstore.py    # ChromaDB client wrapper
 │
+├── uploads/                  # Local filesystem storage for raw bytes (gitignored)
+│   └── media/
+│       ├── images/           # Stored image bytes
+│       └── audios/           # Stored audio bytes
+│
 ├── tests/                    # pytest test suite
 ├── scripts/
 │   └── seed.py               # Seed products, customers & knowledge docs
 │
 ├── chroma_data/              # ChromaDB persistent storage
+├── test_media_demo.py        # Standalone verification script for media storage & retrieval
 ├── .env.example
 ├── requirements.txt
 ├── docker-compose.yml
@@ -207,6 +219,7 @@ ai-sales-and-customer-service-agent/
 
 ```
 customers ──1──< orders ──1──< order_items >──1── products
+customers ──1──< media_files
 
 knowledge_documents ──[ingestion]──> ChromaDB vector index
 ```
@@ -262,6 +275,20 @@ knowledge_documents ──[ingestion]──> ChromaDB vector index
 | `category` | String(50) | e.g. `policy`, `shipping`, `warranty`, `payment` |
 | `source` | String(255) | Optional |
 | `created_at` / `updated_at` | DateTime(tz) | UTC |
+
+#### `media_files`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | Integer PK | |
+| `file_name` | String(255) | Original / sanitized filename |
+| `extension` | String(20) | File extension (e.g. `png`, `mp3`, `wav`, `webm`) |
+| `file_path` | String(500) | Local filesystem path to stored raw bytes |
+| `content` | LargeBinary | Binary file bytes (redundant DB storage for reliability) |
+| `media_type` | String(20) | `image` or `audio` |
+| `mime_type` | String(100) | Standard MIME type (e.g. `image/png`, `audio/webm`) |
+| `source` | String(30) | Channel source (`web_chat` or `whatsapp`) |
+| `customer_id` | FK → customers | Customer who uploaded the file |
+| `created_at` | DateTime(tz) | UTC |
 
 ### Data Authority
 
@@ -481,25 +508,29 @@ All knowledge CRUD goes through `KnowledgeService`, never direct ORM creation, e
 
 ---
 
-## Media Processing (Vision & Audio)
+## Media Processing (Vision, Audio & Local Storage)
 
-The system supports multi-modal user interactions across Web Chat and WhatsApp using Groq's dedicated multi-modal models:
+The system supports multi-modal user interactions across Web Chat and WhatsApp using Groq's dedicated multi-modal models alongside a robust local byte-storage pipeline:
 
 - **Image Understanding:** Powered by `meta-llama/llama-4-scout-17b-16e-instruct` via Groq's Vision API. When a user uploads a product photo, the model identifies the device brand, model, color, and visible condition, allowing the agent to resolve product queries directly from images.
-- **Audio / Voice Note Transcription:** Powered by `whisper-large-v3-turbo` via Groq's Speech-to-Text API. Voice notes recorded in Web Chat or sent over WhatsApp are automatically transcribed into normalized text and fed seamlessly into the agent workflow.
+- **Audio / Voice Note Transcription:** Powered by `whisper-large-v3-turbo` via Groq's Speech-to-Text API. Voice notes recorded live in the Web Chat or sent over WhatsApp are automatically transcribed into normalized text and fed seamlessly into the agent workflow.
+- **Local Byte Storage:** Files are written directly to the local filesystem as raw bytes in dedicated directories (`uploads/media/images/` and `uploads/media/audios/`) with collision-free filenames (`<uuid>_<filename>`). The resolved absolute path is recorded in `MediaFile.file_path`.
+- **Pre-AI Byte Persistence:** Files are saved to local disk and committed to the database **before** calling external AI APIs, ensuring original files are never lost even if external AI providers experience downtime or rate limits.
+- **Retrieval in Original Form:** Original files can be retrieved at any time in their native form (original MIME type, filename, and exact byte content) via `MediaService.get_original_file()`, `MediaService.get_media_bytes()`, or dedicated `/api/media` endpoints.
 
 ### Media Configuration & Safeguards
 
 ```env
+MEDIA_STORAGE_DIR=./uploads/media
 GROQ_VISION_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
 GROQ_STT_MODEL=whisper-large-v3-turbo
 MEDIA_MAX_IMAGE_MB=10
 MEDIA_MAX_AUDIO_MB=25
 ```
 
-- **Strict MIME Type Validation:** Only safe, recognized image formats (`image/jpeg`, `image/png`, `image/webp`) and audio formats (`audio/mpeg`, `audio/wav`, `audio/ogg`, `audio/mp4`, `audio/x-m4a`) are accepted.
+- **Strict MIME Type Validation:** Safe, recognized image formats (`image/jpeg`, `image/png`, `image/webp`, `image/gif`) and audio formats (`audio/mpeg`, `audio/wav`, `audio/ogg`, `audio/webm`, `audio/mp4`, `audio/m4a`, `audio/flac`) are accepted.
 - **Size Limit Enforcement:** Requests exceeding `MEDIA_MAX_IMAGE_MB` or `MEDIA_MAX_AUDIO_MB` are rejected with HTTP 400 Bad Request before file processing.
-- **Fault-Tolerant Media Processing:** If external API transcription or vision fails (e.g. rate limits or temporary provider downtime), the media failure is logged, user text is preserved, and the request completes without throwing an unhandled 500 error.
+- **Fault-Tolerant Media Processing:** If external API transcription or vision fails, the failure is logged, the file is preserved on disk, user text is maintained, and the request completes without throwing an unhandled 500 error.
 
 ---
 
@@ -508,10 +539,87 @@ MEDIA_MAX_AUDIO_MB=25
 The Web Chat UI (`/chat`) provides an interactive interface supporting:
 
 - **Real-Time Text Chat:** Conversational history maintained per session.
-- **Image File Uploads:** Drag-and-drop or file picker with instant preview.
-- **Voice Message Recording:** In-browser audio recording via MediaRecorder API with audio waveform playback.
+- **Image & Audio File Attachments:** Dedicated **`📎 Attach`** button supporting `.png`, `.jpg`, `.webp`, `.mp3`, `.wav`, `.ogg`, `.webm`, `.m4a` files with pre-upload preview.
+- **Live Microphone Voice Recording:** Dedicated **`🎙️ Record`** button using the browser's `MediaRecorder` API. Features live recording pulse animation, elapsed timer, interactive audio playback preview, and one-click cancel/clear before sending.
+- **Inline Media Playback & Download Links:** Uploaded images render inline thumbnails, and voice notes render interactive HTML5 `<audio controls>` players with a direct link to download the original file.
 - **Multipart Form Handling:** Seamless submission of text + optional media via `POST /api/chat`.
 - **Client & Server Validation:** Both frontend and backend reject invalid file formats and oversized files with clear, actionable user messages.
+
+---
+
+## WhatsApp Integration (WAHA)
+
+The WhatsApp channel is an adapter around the existing `agent_graph`; it does not create a second agent.
+
+### 1. Configure `.env`
+
+Copy `.env.example` to `.env`, then set your existing database and Groq values plus:
+
+```env
+WAHA_BASE_URL=http://localhost:3000
+WAHA_API_KEY=the_same_api_key_used_by_waha
+WAHA_SESSION=default
+WAHA_WEBHOOK_SECRET=
+WAHA_DEFAULT_ENGINE=NOWEB
+WAHA_DASHBOARD_USERNAME=admin
+WAHA_DASHBOARD_PASSWORD=use_a_strong_password
+WHATSAPP_SWAGGER_USERNAME=admin
+WHATSAPP_SWAGGER_PASSWORD=use_another_strong_password
+```
+
+Use the same `WAHA_API_KEY` in the Flask app and the WAHA container. Do not commit `.env` or share its values.
+
+### 2. Start PostgreSQL and WAHA
+
+```bash
+docker compose up -d postgres waha
+docker compose ps
+```
+
+Open WAHA at `http://localhost:3000` and sign in with the dashboard credentials from `.env`. Create/start the `default` session and scan the QR code using WhatsApp → Linked devices.
+
+### 3. Start Flask
+
+In a second terminal, from the project root and with your Python virtual environment activated:
+
+```bash
+pip install -r requirements.txt
+python scripts/seed.py
+python run.py
+```
+
+The app should respond at `http://localhost:5000/health`. The dashboard/chat is at `http://localhost:5000/chat`.
+
+### 4. Configure the WAHA webhook
+
+In WAHA's dashboard/API settings, configure a webhook:
+
+- URL: `http://host.docker.internal:5000/webhooks/whatsapp`
+- Event: `message`
+- Session: `default` (if the UI asks for a session filter)
+
+`host.docker.internal` is important here: WAHA runs inside Docker while Flask runs directly on the Windows host. If Flask is also moved into the same Compose network, use `http://app:5000/webhooks/whatsapp` instead (where `app` is the Flask service name).
+
+If you configure a custom webhook header, set `X-Webhook-Secret` to the same value as `WAHA_WEBHOOK_SECRET` in `.env`. Leave `WAHA_WEBHOOK_SECRET` empty for a local test if you do not configure that header.
+
+### 5. Test from WhatsApp
+
+Send a direct message to the linked WhatsApp account, for example:
+
+- `Hello`
+- `What is your return policy?`
+- `Is Samsung Galaxy S24 available?`
+- `I want to buy 2 Samsung Galaxy S24`
+
+The webhook maps each WhatsApp chat to a customer record and invokes the existing LangGraph agent. Check the order in the Flask dashboard after the purchase test.
+
+### Webhook Reliability & Production Protections
+
+- **Message Deduplication:** Built-in thread-safe LRU deduplication (`WebhookDeduplicator`) caches message IDs with a 10-minute TTL (capacity: 10,000 entries). WAHA retry deliveries are detected and dropped immediately with HTTP 200, guaranteeing that duplicate webhook deliveries never trigger duplicate orders or duplicate replies.
+- **Fault-Tolerant Media Handling:** When incoming messages include images or voice notes, media download or transcription errors are caught and logged without aborting the webhook. The customer's text content is still processed, and the agent responds gracefully rather than throwing an unhandled 500 error.
+- **Webhook Secret Verification:** When `WAHA_WEBHOOK_SECRET` is set in `.env`, the controller verifies the incoming `X-Webhook-Secret` header using constant-time comparison, immediately rejecting unauthorized requests with 401.
+- **Chat & Sender Filtering:** Group messages (`@g.us`) and self-sent messages (`fromMe: true`) are safely filtered out before hitting the agent.
+- **Conversation History:** Maps each WhatsApp chat ID to a consistent customer record and maintains conversational context across turns.
 
 ---
 
@@ -521,21 +629,66 @@ The Web Chat UI (`/chat`) provides an interactive interface supporting:
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/chat` | Chat UI |
-| `POST` | `/api/chat` | Send a message |
+| `GET` | `/chat` | Web Chat UI |
+| `POST` | `/api/chat` | Send a message (JSON or `multipart/form-data` with `file`) |
 | `GET` | `/health` | Health check |
 
-**`POST /api/chat`**
+**`POST /api/chat` (with optional file upload)**
 ```json
-// Request
-{
-  "message": "What is your return policy?",
-  "customer_id": 1,
-  "conversation_id": "session-abc"
-}
-
 // Response
 {
+  "success": true,
+  "conversation_id": "session-abc",
+  "response": "Hello! I see you've uploaded an image...",
+  "intent": "product_question",
+  "tool_result": null,
+  "media_id": 1,
+  "media_url": "/api/media/1",
+  "media_type": "image",
+  "media_name": "product.png",
+  "download_url": "/api/media/1?download=1",
+  "raw_url": "/api/media/1/raw"
+}
+```
+
+### Media (Storage & Retrieval)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/media` | List recent media files (supports `?customer_id=<id>`) |
+| `GET` | `/api/media/<id>` | Stream original file inline (matching original MIME type) |
+| `GET` | `/api/media/<id>?download=1` | Download original file with original filename & extension |
+| `GET` | `/api/media/<id>/raw` | Stream pure raw bytes (`application/octet-stream`) |
+| `GET` | `/api/media/<id>/info` | Get file metadata, local path, byte size, and `exists_locally` status |
+
+**`GET /api/media/1/info` Response:**
+```json
+{
+  "success": true,
+  "media": {
+    "id": 1,
+    "file_name": "product.png",
+    "extension": "png",
+    "media_type": "image",
+    "mime_type": "image/png",
+    "file_path": "e:\\Projects\\...\\uploads\\media\\images\\..._product.png",
+    "exists_locally": true,
+    "size_bytes": 104520,
+    "source": "web_chat",
+    "customer_id": 1,
+    "created_at": "2026-11-19T15:00:00Z",
+    "url": "/api/media/1",
+    "download_url": "/api/media/1?download=1",
+    "raw_url": "/api/media/1/raw"
+  }
+}
+```
+
+### WhatsApp (WAHA)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/webhooks/whatsapp` | Inbound WhatsApp webhook (messages, images, audio notes) |
   "success": true,
   "conversation_id": "session-abc",
   "response": "Our return policy allows ...",
@@ -599,7 +752,8 @@ GROQ_MODEL=qwen/qwen3.8-27b
 GROQ_VISION_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
 GROQ_STT_MODEL=whisper-large-v3-turbo
 
-# Upload Size Limits
+# Media Storage Directory & Upload Limits
+MEDIA_STORAGE_DIR=./uploads/media
 MEDIA_MAX_IMAGE_MB=10
 MEDIA_MAX_AUDIO_MB=25
 
@@ -835,7 +989,13 @@ The automated test suite contains **90 tests across 16 test modules**, executing
 | `test_controllers.py` | 5 | Health endpoint, root redirect, empty message rejection, missing message rejection, chat API valid message processing |
 | `test_admin_controller.py` | 5 | Admin dashboard overview, products page, orders page, customers page, knowledge page |
 | `test_admin_crud.py` | 4 | Negative values rejection, invalid numeric values rejection, negative stock rejection, knowledge CRUD synchronization |
-| **Total** | **90** | **100% Passing (0 failed, 0 skipped, 0 errors)** |
+| `test_media_storage.py` | 4 | Local filesystem raw byte persistence (image & audio), disk-to-input byte equality, MediaService original stream retrieval, `/api/media` endpoints (inline, download, raw, info) |
+| **Total** | **94** | **100% Passing (0 failed, 0 skipped, 0 errors)** |
+
+You can also run the quick standalone media verification script without starting PostgreSQL:
+```bash
+python test_media_demo.py
+```
 
 The full test suite **does not call external APIs** — the LLM, Vision, Whisper, and WAHA network calls are completely mocked.
 
@@ -983,78 +1143,3 @@ Before deploying to production:
 - [ ] Enable HTTPS and rate limiting
 - [ ] Set up RAG evaluation to monitor retrieval quality
 - [ ] Configure secret management (e.g. AWS Secrets Manager, Vault)
----
-
-## WhatsApp Integration (WAHA)
-
-The WhatsApp channel is an adapter around the existing `agent_graph`; it does not create a second agent.
-
-### 1. Configure `.env`
-
-Copy `.env.example` to `.env`, then set your existing database and Groq values plus:
-
-```env
-WAHA_BASE_URL=http://localhost:3000
-WAHA_API_KEY=the_same_api_key_used_by_waha
-WAHA_SESSION=default
-WAHA_WEBHOOK_SECRET=
-WAHA_DEFAULT_ENGINE=NOWEB
-WAHA_DASHBOARD_USERNAME=admin
-WAHA_DASHBOARD_PASSWORD=use_a_strong_password
-WHATSAPP_SWAGGER_USERNAME=admin
-WHATSAPP_SWAGGER_PASSWORD=use_another_strong_password
-```
-
-Use the same `WAHA_API_KEY` in the Flask app and the WAHA container. Do not commit `.env` or share its values.
-
-### 2. Start PostgreSQL and WAHA
-
-```bash
-docker compose up -d postgres waha
-docker compose ps
-```
-
-Open WAHA at `http://localhost:3000` and sign in with the dashboard credentials from `.env`. Create/start the `default` session and scan the QR code using WhatsApp → Linked devices.
-
-### 3. Start Flask
-
-In a second terminal, from the project root and with your Python virtual environment activated:
-
-```bash
-pip install -r requirements.txt
-python scripts/seed.py
-python run.py
-```
-
-The app should respond at `http://localhost:5000/health`. The dashboard/chat is at `http://localhost:5000/chat`.
-
-### 4. Configure the WAHA webhook
-
-In WAHA's dashboard/API settings, configure a webhook:
-
-- URL: `http://host.docker.internal:5000/webhooks/whatsapp`
-- Event: `message`
-- Session: `default` (if the UI asks for a session filter)
-
-`host.docker.internal` is important here: WAHA runs inside Docker while Flask runs directly on the Windows host. If Flask is also moved into the same Compose network, use `http://app:5000/webhooks/whatsapp` instead (where `app` is the Flask service name).
-
-If you configure a custom webhook header, set `X-Webhook-Secret` to the same value as `WAHA_WEBHOOK_SECRET` in `.env`. Leave `WAHA_WEBHOOK_SECRET` empty for a local test if you do not configure that header.
-
-### 5. Test from WhatsApp
-
-Send a direct message to the linked WhatsApp account, for example:
-
-- `Hello`
-- `What is your return policy?`
-- `Is Samsung Galaxy S24 available?`
-- `I want to buy 2 Samsung Galaxy S24`
-
-The webhook maps each WhatsApp chat to a customer record and invokes the existing LangGraph agent. Check the order in the Flask dashboard after the purchase test.
-
-### Webhook Reliability & Production Protections
-
-- **Message Deduplication:** Built-in thread-safe LRU deduplication (`WebhookDeduplicator`) caches message IDs with a 10-minute TTL (capacity: 10,000 entries). WAHA retry deliveries are detected and dropped immediately with HTTP 200, guaranteeing that duplicate webhook deliveries never trigger duplicate orders or duplicate replies.
-- **Fault-Tolerant Media Handling:** When incoming messages include images or voice notes, media download or transcription errors are caught and logged without aborting the webhook. The customer's text content is still processed, and the agent responds gracefully rather than throwing an unhandled 500 error.
-- **Webhook Secret Verification:** When `WAHA_WEBHOOK_SECRET` is set in `.env`, the controller verifies the incoming `X-Webhook-Secret` header using constant-time comparison, immediately rejecting unauthorized requests with 401.
-- **Chat & Sender Filtering:** Group messages (`@g.us`) and self-sent messages (`fromMe: true`) are safely filtered out before hitting the agent.
-- **Conversation History:** Maps each WhatsApp chat ID to a consistent customer record and maintains conversational context across turns.

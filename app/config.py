@@ -37,7 +37,11 @@ class Config:
     WAHA_SESSION = os.getenv("WAHA_SESSION", "default")
     WAHA_WEBHOOK_SECRET = os.getenv("WAHA_WEBHOOK_SECRET")
 
-    # Media processing (Groq API; configurable independently from the chat model)
+    # Media storage and processing
+    MEDIA_STORAGE_DIR = os.getenv(
+        "MEDIA_STORAGE_DIR",
+        os.path.join(os.path.abspath(os.path.dirname(os.path.dirname(__file__))), "uploads", "media"),
+    )
     GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
     GROQ_STT_MODEL = os.getenv("GROQ_STT_MODEL", "whisper-large-v3-turbo")
     MEDIA_MAX_IMAGE_MB = int(os.getenv("MEDIA_MAX_IMAGE_MB", "10"))

@@ -9,3 +9,4 @@ chroma_data/
 .pytest_cache/
 
 .vscode/
+uploads/

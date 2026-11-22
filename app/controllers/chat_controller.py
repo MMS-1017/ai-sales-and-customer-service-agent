@@ -37,11 +37,23 @@ def chat():
         if not customer:
             return jsonify({"success": False, "error": "Customer not found."}), 404
 
+        record = None
         if upload and upload.filename:
             file_name = secure_filename(upload.filename)
             content = upload.read()
-            mime_type = upload.mimetype or ""
-            media_type = "image" if mime_type.startswith("image/") else "audio" if mime_type.startswith("audio/") else None
+            raw_mime = upload.mimetype or ""
+            mime_type = raw_mime.split(";", 1)[0].strip().lower()
+            if mime_type.startswith("image/"):
+                media_type = "image"
+            elif (
+                mime_type.startswith("audio/")
+                or mime_type in ("video/mp4", "video/3gpp", "video/quicktime")
+                or file_name.lower().endswith((".mp3", ".wav", ".m4a", ".ogg", ".webm", ".flac", ".mp4", ".aac"))
+            ):
+                media_type = "audio"
+            else:
+                media_type = None
+
             if not media_type:
                 return jsonify({"success": False, "error": "Only image and audio uploads are supported."}), 400
             try:
@@ -61,7 +73,21 @@ def chat():
         response = result.get("response", "")
         ConversationService.add_message(conversation_id, message)
         ConversationService.add_message(conversation_id, response)
-        return jsonify({"success": True, "conversation_id": conversation_id, "response": response, "intent": result.get("intent"), "tool_result": result.get("tool_result")})
+        payload = {
+            "success": True,
+            "conversation_id": conversation_id,
+            "response": response,
+            "intent": result.get("intent"),
+            "tool_result": result.get("tool_result"),
+        }
+        if record:
+            payload["media_id"] = record.id
+            payload["media_url"] = f"/api/media/{record.id}"
+            payload["media_type"] = record.media_type
+            payload["media_name"] = record.file_name
+            payload["download_url"] = f"/api/media/{record.id}?download=1"
+            payload["raw_url"] = f"/api/media/{record.id}/raw"
+        return jsonify(payload)
     except Exception as exc:
         db.session.rollback()
         return jsonify({"success": False, "error": str(exc)}), 500
