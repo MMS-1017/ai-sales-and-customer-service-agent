@@ -8,25 +8,13 @@ class KnowledgeDocument(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    title = db.Column(
-        db.String(255),
-        nullable=False,
-    )
+    title = db.Column(db.String(255), nullable=False)
 
-    content = db.Column(
-        db.Text,
-        nullable=False,
-    )
+    content = db.Column(db.Text, nullable=False)
 
-    category = db.Column(
-        db.String(50),
-        nullable=False,
-    )
+    category = db.Column(db.String(50), nullable=False)
 
-    source = db.Column(
-        db.String(255),
-        nullable=True,
-    )
+    source = db.Column(db.String(255), nullable=True)
 
     created_at = db.Column(
         db.DateTime(timezone=True),

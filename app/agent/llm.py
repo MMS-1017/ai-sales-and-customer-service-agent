@@ -1,15 +1,17 @@
+from functools import lru_cache
 from langchain_groq import ChatGroq
 from app.config import Config
 
 
-def get_llm():
+@lru_cache(maxsize=4)
+def get_llm(model: str | None = None, temperature: float = 0.0):
     if not Config.GROQ_API_KEY:
         raise ValueError(
             "GROQ_API_KEY is not configured."
         )
 
     return ChatGroq(
-        model=Config.GROQ_MODEL,
-        temperature=0,
+        model=model or Config.GROQ_MODEL,
+        temperature=temperature,
         api_key=Config.GROQ_API_KEY,
     )

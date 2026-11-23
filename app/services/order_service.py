@@ -1,5 +1,4 @@
 from decimal import Decimal
-
 from app.extensions import db
 from app.models import Customer, Order, OrderItem, Product
 
@@ -7,11 +6,8 @@ from app.models import Customer, Order, OrderItem, Product
 class OrderService:
 
     @staticmethod
-    def create_order(
-        customer_id: int,
-        product_id: int,
-        quantity: int,
-    ):
+    def create_order(customer_id: int, product_id: int, quantity: int):
+        
         if quantity <= 0:
             return {
                 "success": False,

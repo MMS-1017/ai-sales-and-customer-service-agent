@@ -1,4 +1,7 @@
+import collections
+import logging
 import mimetypes
+import threading
 import requests
 from flask import Blueprint, jsonify, request
 
@@ -9,6 +12,42 @@ from app.models import Customer
 from app.services.conversation_service import ConversationService
 from app.services.facebook_service import FacebookService
 from app.services.media_service import MediaService
+
+logger = logging.getLogger(__name__)
+
+
+class WebhookDeduplicator:
+    def __init__(self, maxsize: int = 2000):
+        self._maxsize = maxsize
+        self._seen = set()
+        self._order = collections.deque()
+        self._lock = threading.Lock()
+
+    def is_duplicate(self, message_id: str | None) -> bool:
+        if not message_id:
+            return False
+        with self._lock:
+            if message_id in self._seen:
+                return True
+            self._seen.add(message_id)
+            self._order.append(message_id)
+            if len(self._order) > self._maxsize:
+                oldest = self._order.popleft()
+                self._seen.discard(oldest)
+            return False
+
+    def remove(self, message_id: str | None) -> None:
+        if not message_id:
+            return
+        with self._lock:
+            self._seen.discard(message_id)
+            try:
+                self._order.remove(message_id)
+            except ValueError:
+                pass
+
+
+webhook_deduplicator = WebhookDeduplicator()
 
 
 facebook_bp = Blueprint(
@@ -72,6 +111,11 @@ def process_message(event):
     sender_id = sender.get("id")
 
     message = event.get("message", {})
+    mid = message.get("mid")
+    if mid and webhook_deduplicator.is_duplicate(str(mid)):
+        logger.info("Ignoring duplicate Facebook message mid=%s", mid)
+        return
+
     text = (message.get("text") or "").strip()
     attachments = message.get("attachments") or []
 
@@ -152,6 +196,8 @@ def process_message(event):
         )
 
     except Exception as exc:
+        if mid:
+            webhook_deduplicator.remove(str(mid))
         import traceback
         print(f"[FB ERROR] Processing message from {sender_id}: {exc}")
         traceback.print_exc()

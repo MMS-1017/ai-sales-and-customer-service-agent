@@ -6,6 +6,7 @@ from app.config import Config
 from app.extensions import db
 from app.models import Customer, Product, Order, OrderItem, KnowledgeDocument, MediaFile
 
+# Blueprints responsible for routes
 from app.controllers.chat_controller import chat_bp
 from app.controllers.admin_controller import admin_bp
 from app.controllers.facebook_controller import facebook_bp
@@ -32,28 +33,26 @@ def create_app(test_config=None):
     app.register_blueprint(whatsapp_bp)
     app.register_blueprint(media_bp)
 
-
+    # Connect to database through SQLAlchemy
     db.init_app(app)
-
-    # ------------------------------------------------------------------
-    # Jinja2 filter: {{ dt | localtime }}
-    # Converts a UTC-aware datetime to the configured DISPLAY_TIMEZONE.
-    # Registered before db.create_all() so a DB error can't skip it.
-    # ------------------------------------------------------------------
+    
+    # specify time zone to display history
     try:
         _tz = ZoneInfo(app.config.get("DISPLAY_TIMEZONE", "UTC"))
     except (ZoneInfoNotFoundError, KeyError):
         _tz = ZoneInfo("UTC")
 
+    # Create and register a timezone function as a jinja filter to use it in HTML
     def localtime_filter(dt, fmt="%Y-%m-%d %H:%M"):
         if dt is None:
             return ""
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=_utc.utc)
         return dt.astimezone(_tz).strftime(fmt)
-
+    
     app.jinja_env.filters["localtime"] = localtime_filter
-
+    
+    # Create database tables if not existed
     with app.app_context():
         try:
             db.create_all()

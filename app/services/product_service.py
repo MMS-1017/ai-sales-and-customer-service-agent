@@ -1,5 +1,6 @@
 import re
-from app.models import Product
+from app.models import Product, OrderItem
+from sqlalchemy import func
 from app.extensions import db
 from rapidfuzz import process, fuzz
 
@@ -43,14 +44,7 @@ COMMON_FILLERS = {
 
 
 def normalize_product_name(text: str | None) -> str:
-    """Normalize text for consistent product matching:
-
-    - Lowercase.
-    - Trim outer whitespace.
-    - Replace non-alphanumeric punctuation and underscores with space.
-    - Collapse multiple whitespace characters into a single space.
-    - Preserve meaningful product identifiers and model suffixes.
-    """
+    """Normalize text for consistent product matching:"""
     if not text:
         return ""
     cleaned = text.lower().strip()
@@ -59,10 +53,9 @@ def normalize_product_name(text: str | None) -> str:
 
 
 def compact_key(text: str | None) -> str:
-    """Extract a compact alphanumeric key for format-tolerant equality (e.g.
-
-    'r-50i' vs 'r50i').
-    """
+    """Extract a compact alphanumeric key for format-tolerant equality 
+        (e.g. 'r-50i' vs 'r50i')"""
+    
     if not text:
         return ""
     return re.sub(r"[^a-z0-9]", "", text.lower())
@@ -106,13 +99,7 @@ class ProductService:
 
     @staticmethod
     def fuzzy_search_products(query: str, threshold: int = 65):
-        """Fuzzy-match query against all active product names using rapidfuzz.
-
-        Returns a list of (Product, score) tuples sorted by descending score,
-        filtered to those above `threshold` (0-100 scale).
-        """
         all_products = Product.query.filter_by(is_active=True).all()
-
         if not all_products:
             return []
 
@@ -138,21 +125,14 @@ class ProductService:
     def match_product(cls, query: str | None, active_only: bool = True) -> dict:
         """Deterministic product matching pipeline with the following priority:
 
-        1. Normalization: Lowercase, trim whitespace, normalize spaces, handle
-        punctuation, preserve meaningful identifiers and suffixes.
+        1. Normalization
         2. Exact matching: Compare normalized names and compact keys using equality.
-        If exactly one product matches, return that product only.
-        Do not include longer product names that merely contain the requested name.
-        3. Alias matching: Check product aliases if defined. Exact alias matches are treated
-        as strong matches.
+        3. Alias matching: Check product aliases if defined. Exact alias matches
+           are treated as strong matches.
         4. Partial matching: Run only when no exact or alias match exists.
-        Ranks candidates by relevance, verifies token coverage, and avoids treating
-        incompatible substring matches (such as accessories like 'case') as relevant.
-        Protects against accessory false positives while properly recognizing brand names
-        and category descriptors.
         5. Ambiguity handling: Ask for clarification only when multiple genuinely plausible
-        candidates remain. Return a proper not-found response otherwise.
-        """
+        candidates remain. Return a proper not-found response otherwise."""
+        
         if not query or not query.strip():
             return {
                 "success": False,
@@ -455,9 +435,6 @@ class ProductService:
 
     @staticmethod
     def get_best_sellers(category: str | None = None, limit: int = 5):
-        from app.models import OrderItem
-        from sqlalchemy import func
-
         units_sold = func.coalesce(func.sum(OrderItem.quantity), 0).label("units_sold")
 
         query = (

@@ -50,7 +50,7 @@ SYSTEM_PROMPT = """
                   14. If the backend tool fails, do not guess or use stale conversational data.
                      Clearly tell the customer that the information could not be verified.
 
-                  14. Keep responses concise, accurate, and helpful.
+                  15. Keep responses concise, accurate, and helpful.
                """
 
 

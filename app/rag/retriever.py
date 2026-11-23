@@ -11,7 +11,7 @@ class KnowledgeRetriever:
         self.embedding_service = embedding_service
         self.vector_store = vector_store
 
-    def retrieve(self, query: str, top_k: int = 3):
+    def retrieve(self, query: str, top_k: int = 3, distance_threshold: float | None = 0.7):
         query_embedding = self.embedding_service.embed_query(query)
 
         results = self.vector_store.search(
@@ -30,6 +30,8 @@ class KnowledgeRetriever:
             metadatas,
             distances,
         ):
+            if distance_threshold is not None and distance > distance_threshold:
+                continue
             retrieved.append(
                 {
                     "content": document,

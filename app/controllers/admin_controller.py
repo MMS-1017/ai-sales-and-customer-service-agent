@@ -1,12 +1,29 @@
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, render_template, request, redirect, url_for
+from flask import Blueprint, current_app, render_template, request, redirect, url_for
 
 from app.extensions import db
 from app.models import Customer, Order, Product, KnowledgeDocument
 from app.services import KnowledgeService
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
+
+
+@admin_bp.before_request
+def require_admin_auth():
+    if current_app.config.get("TESTING") and not current_app.config.get("ADMIN_AUTH_STRICT"):
+        return None
+    if not current_app.config.get("ADMIN_AUTH_ENABLED", True):
+        return None
+    auth = request.authorization
+    admin_user = current_app.config.get("ADMIN_USERNAME", "admin")
+    admin_pass = current_app.config.get("ADMIN_PASSWORD", "admin123")
+    if not auth or auth.username != admin_user or auth.password != admin_pass:
+        return (
+            "Unauthorized: Admin login required",
+            401,
+            {"WWW-Authenticate": 'Basic realm="Admin Access Required"'},
+        )
 
 
 @admin_bp.get("/")

@@ -21,6 +21,7 @@ class Customer(db.Model):
         back_populates="customer",
         cascade="all, delete-orphan",
     )
-
+    
+    # Object Representation when printing or debugging
     def __repr__(self):
         return f"<Customer {self.email}>"
