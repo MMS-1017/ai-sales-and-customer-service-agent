@@ -13,7 +13,7 @@ class Config:
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    CHROMA_PATH = os.getenv("CHROMA_PATH", "./chroma_data")
+    CHROMA_PATH = os.path.abspath(os.getenv("CHROMA_PATH", "./chroma_data"))
 
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
     GROQ_MODEL = os.getenv(

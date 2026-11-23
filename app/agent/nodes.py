@@ -246,25 +246,15 @@ def retrieve_context(state):
             "retrieved_context": []
         }
 
-    embedding_service = get_embedding_service(Config.EMBEDDING_MODEL)
-
-    vector_store = ChromaVectorStore(
-        Config.CHROMA_PATH
-    )
-
-    retriever = KnowledgeRetriever(
-        embedding_service,
-        vector_store,
-    )
-
-    results = retriever.retrieve(
-        messages[-1],
-        top_k=3,
-    )
-
-    return {
-        "retrieved_context": results
-    }
+    try:
+        embedding_service = get_embedding_service(Config.EMBEDDING_MODEL)
+        vector_store = ChromaVectorStore(Config.CHROMA_PATH)
+        retriever = KnowledgeRetriever(embedding_service, vector_store)
+        results = retriever.retrieve(messages[-1], top_k=3)
+        return {"retrieved_context": results}
+    except Exception as exc:
+        print(f"[RAG WARNING] Retrieval failed gracefully: {exc}")
+        return {"retrieved_context": []}
 
 # ---------------------------------Decision Node--------------------------------------
 def agent_decision(state):

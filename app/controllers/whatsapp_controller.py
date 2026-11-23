@@ -38,6 +38,16 @@ class WebhookDeduplicator:
                 self._seen.discard(oldest)
             return False
 
+    def remove(self, message_id: str | None) -> None:
+        if not message_id:
+            return
+        with self._lock:
+            self._seen.discard(message_id)
+            try:
+                self._order.remove(message_id)
+            except ValueError:
+                pass
+
     def clear(self):
         with self._lock:
             self._seen.clear()
@@ -50,7 +60,8 @@ webhook_deduplicator = WebhookDeduplicator()
 @whatsapp_bp.post("/webhooks/whatsapp")
 def whatsapp_webhook():
     expected_secret = current_app.config.get("WAHA_WEBHOOK_SECRET")
-    if expected_secret and request.headers.get("X-Webhook-Secret") != expected_secret:
+    secret_received = request.headers.get("X-Webhook-Secret") or request.args.get("secret")
+    if expected_secret and secret_received != expected_secret:
         return jsonify({"success": False, "error": "Unauthorized webhook"}), 401
 
     data = request.get_json(silent=True) or {}
@@ -120,6 +131,8 @@ def whatsapp_webhook():
 
         return jsonify({"status": "processed"}), 200
     except Exception:
+        if message_id:
+            webhook_deduplicator.remove(str(message_id))
         db.session.rollback()
         logger.exception("Failed to process WAHA message from %s", chat_id)
         return jsonify({"success": False, "error": "Message processing failed"}), 500
