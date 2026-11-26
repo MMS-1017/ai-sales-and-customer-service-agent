@@ -1,26 +1,35 @@
 import hashlib
 import hmac
+import logging
 
+from flask import current_app, has_app_context
 import requests
 
 from app.config import Config
+
+logger = logging.getLogger(__name__)
 
 
 class FacebookService:
 
     @staticmethod
-    def verify_signature(raw_body, signature):
-        if not Config.FACEBOOK_APP_SECRET:
-            return True
+    def verify_signature(raw_body, signature, *, allow_unconfigured: bool = True):
+        secret = Config.FACEBOOK_APP_SECRET
+        if not secret and has_app_context():
+            secret = current_app.config.get("FACEBOOK_APP_SECRET")
 
-        if not signature:
+        if not secret:
+            if allow_unconfigured:
+                logger.warning("FACEBOOK_APP_SECRET is not configured; webhook signature check skipped.")
+                return True
+            logger.error("FACEBOOK_APP_SECRET is missing and REQUIRE_WEBHOOK_SECRETS is enabled.")
             return False
 
-        if not signature.startswith("sha256="):
+        if not signature or not signature.startswith("sha256="):
             return False
 
         expected = hmac.new(
-            Config.FACEBOOK_APP_SECRET.encode("utf-8"),
+            secret.encode("utf-8"),
             raw_body,
             hashlib.sha256,
         ).hexdigest()

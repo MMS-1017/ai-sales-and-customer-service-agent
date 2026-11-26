@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversation #{{ conversation.id }} - Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .admin-page { width: min(1100px, 95%); margin: 28px auto; }
+        .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; gap: 12px; flex-wrap: wrap; }
+        .top-nav a { text-decoration: none; color: #2563eb; font-weight: 600; }
+        .conv-meta-card { background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px 20px; margin-bottom: 18px; }
+        .conv-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 10px; font-size: 14px; }
+        .meta-label { color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #e0e7ff; color: #1e40af; }
+        .badge-whatsapp { background: #dcfce7; color: #166534; }
+        .badge-facebook { background: #dbeafe; color: #1d4ed8; }
+        .badge-web_chat { background: #f3e8ff; color: #6b21a8; }
+        .other-threads { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e5e7eb; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .thread-pill { display: inline-block; padding: 4px 10px; border: 1px solid #d1d5db; border-radius: 6px; text-decoration: none; color: #111827; font-size: 13px; background: #f9fafb; }
+        .thread-pill:hover { border-color: #2563eb; color: #2563eb; }
+        .transcript-box { background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+        .msg-row { display: flex; flex-direction: column; max-width: 78%; }
+        .msg-row.customer { align-self: flex-end; align-items: flex-end; }
+        .msg-row.assistant, .msg-row.system { align-self: flex-start; align-items: flex-start; }
+        .msg-bubble { padding: 12px 15px; border-radius: 10px; white-space: pre-wrap; line-height: 1.5; word-break: break-word; }
+        .msg-row.customer .msg-bubble { background: #2563eb; color: white; }
+        .msg-row.assistant .msg-bubble { background: #f3f4f6; color: #111827; border: 1px solid #e5e7eb; }
+        .msg-row.system .msg-bubble { background: #fef3c7; color: #92400e; }
+        .msg-meta { font-size: 11px; color: #6b7280; margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .att-box { margin-bottom: 8px; padding: 8px; border-radius: 8px; background: rgba(0, 0, 0, 0.08); }
+        .att-box img { max-width: 260px; max-height: 220px; border-radius: 6px; display: block; margin-bottom: 6px; }
+        .att-box audio { max-width: 260px; display: block; margin-bottom: 6px; }
+        .att-link { font-size: 12px; color: inherit; text-decoration: underline; }
+    </style>
+</head>
+
+<body>
+<div class="admin-page">
+    <div class="top-nav">
+        <a href="{{ url_for('admin.conversations') }}">← All Conversations</a>
+        <div style="display:flex;gap:16px;">
+            <a href="{{ url_for('admin.conversations', customer_id=conversation.customer_id) }}">All Chats for This Customer</a>
+            <a href="{{ url_for('admin.customers') }}">Customers</a>
+            <a href="{{ url_for('admin.dashboard') }}">Dashboard</a>
+        </div>
+    </div>
+
+    <div class="conv-meta-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+            <h1 style="margin:0;font-size:22px;">
+                Conversation #{{ conversation.id }}
+                <span class="badge badge-{{ conversation.channel }}" style="margin-left:8px;">{{ conversation.channel }}</span>
+            </h1>
+            <span style="font-size:13px;color:#4b5563;">Status: <strong>{{ conversation.status }}</strong></span>
+        </div>
+
+        <div class="conv-meta-grid">
+            <div>
+                <div class="meta-label">Customer</div>
+                <div>
+                    <strong>{{ conversation.customer.name if conversation.customer else 'Unknown' }}</strong>
+                    (#{{ conversation.customer_id }})
+                </div>
+                <div style="font-size:12px;color:#6b7280;">{{ conversation.customer.email if conversation.customer else '' }}</div>
+            </div>
+            <div>
+                <div class="meta-label">External Thread ID</div>
+                <div style="font-family:monospace;font-size:13px;word-break:break-all;">{{ conversation.external_conversation_id }}</div>
+            </div>
+            <div>
+                <div class="meta-label">Started</div>
+                <div>{{ conversation.started_at | localtime }}</div>
+            </div>
+            <div>
+                <div class="meta-label">Last Activity</div>
+                <div>{{ conversation.last_message_at | localtime }}</div>
+            </div>
+        </div>
+
+        {% if conversation.customer and conversation.customer.channel_identities %}
+        <div style="margin-top:12px;font-size:13px;">
+            <span class="meta-label" style="margin-right:6px;">Linked Identities:</span>
+            {% for ident in conversation.customer.channel_identities %}
+                <span class="badge badge-{{ ident.channel }}" style="margin-right:4px;">{{ ident.channel }}: {{ ident.external_user_id }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if other_conversations %}
+        <div class="other-threads">
+            <span class="meta-label">Other Customer Chats:</span>
+            {% for other in other_conversations %}
+                <a href="{{ url_for('admin.conversation_detail', conversation_id=other.id) }}" class="thread-pill">
+                    #{{ other.id }} · {{ other.channel }} ({{ other.messages|length }} msgs · {{ other.last_message_at | localtime }})
+                </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="transcript-box">
+        {% if conversation.messages %}
+            {% for msg in conversation.messages %}
+                <div class="msg-row {{ msg.role }}">
+                    <div class="msg-bubble">
+                        {% if msg.attachments %}
+                            {% for att in msg.attachments %}
+                                <div class="att-box">
+                                    {% if att.media_file_id %}
+                                        {% if att.media_type == 'image' %}
+                                            <img src="{{ url_for('media.get_media_file', media_id=att.media_file_id) }}" alt="{{ att.file_name or 'Image attachment' }}">
+                                        {% elif att.media_type == 'audio' %}
+                                            <audio controls src="{{ url_for('media.get_media_file', media_id=att.media_file_id) }}"></audio>
+                                        {% endif %}
+                                        <a href="{{ url_for('media.get_media_file', media_id=att.media_file_id, download=1) }}" class="att-link">
+                                            Download {{ att.file_name or att.media_type }}
+                                        </a>
+                                    {% elif att.external_url %}
+                                        <a href="{{ att.external_url }}" target="_blank" rel="noopener noreferrer" class="att-link">
+                                            External {{ att.media_type }}: {{ att.file_name or att.external_url }}
+                                        </a>
+                                    {% else %}
+                                        <span>[{{ att.media_type }} attachment: {{ att.file_name or 'unnamed' }}]</span>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                        {{ msg.content }}
+                    </div>
+                    <div class="msg-meta">
+                        <span><strong>{{ 'Customer' if msg.role == 'customer' else ('Agent' if msg.role == 'assistant' else msg.role) }}</strong></span>
+                        <span>{{ msg.created_at | localtime }}</span>
+                        <span>{{ msg.delivery_status }}</span>
+                        {% if msg.external_message_id %}
+                            <span style="font-family:monospace;">ext: {{ msg.external_message_id }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p style="color:#6b7280;margin:0;">No messages recorded in this conversation yet.</p>
+        {% endif %}
+    </div>
+</div>
+</body>
+</html>

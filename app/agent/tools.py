@@ -48,25 +48,17 @@ def get_product_details(product_id: int):
         "description": product.description,
         "category": product.category,
         "price": f"${product.price:.2f}",
+        "stock_quantity": product.stock_quantity,
         "is_available": product.stock_quantity > 0,
         "is_active": product.is_active,
     }
 
 
 def check_product_availability(product_id: int, quantity: int):
-    result = ProductService.check_availability(
+    return ProductService.check_availability(
         product_id=product_id,
         quantity=quantity,
     )
-    if result.get("success"):
-        return {
-            "success": True,
-            "product_id": result["product_id"],
-            "product_name": result["product_name"],
-            "requested_quantity": result["requested_quantity"],
-            "in_stock": result["in_stock"],
-        }
-    return result
 
 
 def create_order(customer_id: int, product_id: int, quantity: int):

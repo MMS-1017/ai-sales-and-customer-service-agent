@@ -1,10 +1,13 @@
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, current_app, render_template, request, redirect, url_for
+from sqlalchemy import or_
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
-from app.models import Customer, Order, Product, KnowledgeDocument
-from app.services import KnowledgeService
+from app.models import Conversation, Customer, KnowledgeDocument, Message, Order, Product
+from app.services import CustomerIdentityService, KnowledgeService
+from app.services.identity_service import CustomerNotFoundError, IdentityConflictError
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -32,6 +35,7 @@ def dashboard():
         "products": Product.query.count(),
         "orders": Order.query.count(),
         "customers": Customer.query.count(),
+        "conversations": Conversation.query.count(),
         "knowledge_documents": KnowledgeDocument.query.count(),
     }
 
@@ -183,6 +187,127 @@ def customers():
     return render_template(
         "customers.html",
         customers=customers,
+    )
+
+
+@admin_bp.post("/customers/link-identity")
+def link_customer_identity():
+    raw_customer_id = request.form.get("customer_id", "").strip()
+    channel = request.form.get("channel", "").strip()
+    external_user_id = request.form.get("external_user_id", "").strip()
+    channel_account_id = request.form.get("channel_account_id", "").strip()
+
+    try:
+        customer_id = int(raw_customer_id)
+    except ValueError:
+        return "Customer ID must be an integer.", 400
+
+    try:
+        CustomerIdentityService.link_identity(
+            customer_id=customer_id,
+            channel=channel,
+            external_user_id=external_user_id,
+            channel_account_id=channel_account_id,
+            verified=True,
+        )
+    except CustomerNotFoundError as exc:
+        return str(exc), 404
+    except (IdentityConflictError, ValueError) as exc:
+        return str(exc), 400
+
+    return redirect(url_for("admin.customers"))
+
+
+# =========================
+# Omnichannel Conversations
+# =========================
+
+@admin_bp.get("/conversations")
+def conversations():
+    selected_channel = request.args.get("channel", "").strip().lower()
+    raw_customer_id = request.args.get("customer_id", "").strip()
+    search_query = request.args.get("q", "").strip()
+
+    query = Conversation.query.options(
+        joinedload(Conversation.customer),
+        selectinload(Conversation.messages),
+    )
+
+    if selected_channel:
+        query = query.filter(Conversation.channel == selected_channel)
+
+    selected_customer_id = None
+    if raw_customer_id:
+        try:
+            selected_customer_id = int(raw_customer_id)
+            query = query.filter(Conversation.customer_id == selected_customer_id)
+        except ValueError:
+            selected_customer_id = None
+
+    if search_query:
+        like_pattern = f"%{search_query}%"
+        query = query.filter(
+            or_(
+                Conversation.external_conversation_id.ilike(like_pattern),
+                Conversation.customer.has(
+                    or_(
+                        Customer.name.ilike(like_pattern),
+                        Customer.email.ilike(like_pattern),
+                    )
+                ),
+                Conversation.messages.any(Message.content.ilike(like_pattern)),
+            )
+        )
+
+    convs = (
+        query
+        .order_by(Conversation.last_message_at.desc(), Conversation.id.desc())
+        .limit(200)
+        .all()
+    )
+
+    db_channels = {
+        row[0] for row in db.session.query(Conversation.channel).distinct().all() if row[0]
+    }
+    channels = sorted({"web_chat", "whatsapp", "facebook"} | db_channels)
+
+    return render_template(
+        "conversations.html",
+        conversations=convs,
+        channels=channels,
+        selected_channel=selected_channel,
+        selected_customer_id=selected_customer_id,
+        search_query=search_query,
+    )
+
+
+@admin_bp.get("/conversations/<int:conversation_id>")
+def conversation_detail(conversation_id: int):
+    conv = (
+        Conversation.query.options(
+            joinedload(Conversation.customer).selectinload(Customer.channel_identities),
+            selectinload(Conversation.messages).selectinload(Message.attachments),
+        )
+        .filter(Conversation.id == conversation_id)
+        .first()
+    )
+    if not conv:
+        return "Conversation not found.", 404
+
+    other_conversations = (
+        Conversation.query.options(selectinload(Conversation.messages))
+        .filter(
+            Conversation.customer_id == conv.customer_id,
+            Conversation.id != conv.id,
+        )
+        .order_by(Conversation.last_message_at.desc(), Conversation.id.desc())
+        .all()
+    )
+
+    return render_template(
+        "conversation_detail.html",
+        conversation=conv,
+        other_conversations=other_conversations,
     )
 
 # =========================

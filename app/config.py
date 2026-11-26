@@ -40,6 +40,10 @@ class Config:
     MEDIA_MAX_IMAGE_MB = int(os.getenv("MEDIA_MAX_IMAGE_MB", "10"))
     MEDIA_MAX_AUDIO_MB = int(os.getenv("MEDIA_MAX_AUDIO_MB", "25"))
 
+    # Webhook security & execution mode
+    REQUIRE_WEBHOOK_SECRETS = os.getenv("REQUIRE_WEBHOOK_SECRETS", "false").lower() in ("true", "1", "yes")
+    WEBHOOK_ASYNC_PROCESSING = os.getenv("WEBHOOK_ASYNC_PROCESSING", "false").lower() in ("true", "1", "yes")
+
     # Admin panel credentials and authentication
     ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
@@ -47,4 +51,4 @@ class Config:
 
     # Timezone used for displaying timestamps in the admin UI.
     # Set to any IANA timezone string, e.g. "Asia/Riyadh", "Europe/Istanbul".
-    DISPLAY_TIMEZONE = os.getenv("DISPLAY_TIMEZONE")
+    DISPLAY_TIMEZONE = os.getenv("DISPLAY_TIMEZONE") or "UTC"

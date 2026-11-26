@@ -83,6 +83,8 @@
                 <th>ID</th>
                 <th>Name</th>
                 <th>Email</th>
+                <th>Linked Channels</th>
+                <th>Chats</th>
                 <th>Orders</th>
                 <th>Registered</th>
             </tr>
@@ -107,6 +109,24 @@
                 </td>
 
                 <td>
+                    {% if customer.channel_identities %}
+                        {% for ident in customer.channel_identities %}
+                            <span style="display:inline-block;padding:2px 6px;margin:2px;background:#e0e7ff;border-radius:4px;font-size:12px;">
+                                {{ ident.channel }}: {{ ident.external_user_id }}
+                            </span>
+                        {% endfor %}
+                    {% else %}
+                        <span style="color:#6b7280;font-size:12px;">—</span>
+                    {% endif %}
+                </td>
+
+                <td>
+                    <a href="{{ url_for('admin.conversations', customer_id=customer.id) }}" style="color:#2563eb;text-decoration:none;font-weight:600;">
+                        View Chats ({{ customer.conversations|length }})
+                    </a>
+                </td>
+
+                <td>
                     {{ customer.orders|length }}
                 </td>
 
@@ -121,6 +141,21 @@
         </tbody>
 
     </table>
+
+    <div style="margin-top:25px;padding:18px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;">
+        <h3 style="margin-top:0;">Link Channel Identity to Customer</h3>
+        <form action="{{ url_for('admin.link_customer_identity') }}" method="post" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <input type="number" name="customer_id" placeholder="Customer ID" required style="padding:8px;width:130px;">
+            <select name="channel" required style="padding:8px;">
+                <option value="whatsapp">WhatsApp</option>
+                <option value="facebook">Messenger</option>
+                <option value="web_chat">Website Chat</option>
+            </select>
+            <input type="text" name="external_user_id" placeholder="External User ID (e.g. 2010...@c.us or PSID)" required style="padding:8px;width:280px;">
+            <input type="text" name="channel_account_id" placeholder="Account Scope (optional)" style="padding:8px;width:160px;">
+            <button type="submit" style="padding:8px 16px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;">Link Identity</button>
+        </form>
+    </div>
 
     {% else %}
 

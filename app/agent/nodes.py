@@ -363,11 +363,30 @@ def generate_response(state):
         if item.get("content")
     )
 
+    cross_channel_items = state.get("cross_channel_context") or []
+    cross_channel_block = ""
+    if cross_channel_items:
+        joined = "\n".join(cross_channel_items)
+        cross_channel_block = (
+            "\nCross-channel customer context (reference only; verify current "
+            "prices and availability via backend tools):\n"
+            f"{joined}\n"
+        )
+
     tool_text = ""
     if tool_result:
+        sanitized_tool_result = (
+            {
+                k: v
+                for k, v in tool_result.items()
+                if k not in {"stock_quantity", "available_quantity", "remaining_stock"}
+            }
+            if isinstance(tool_result, dict)
+            else tool_result
+        )
         tool_text = f"""
                     AUTHORITATIVE BACKEND TOOL RESULT:
-                    {tool_result}
+                    {sanitized_tool_result}
 
                     IMPORTANT:
                     - Treat this backend result as the source of truth for current product price,
@@ -385,7 +404,7 @@ def generate_response(state):
 
                 Retrieved knowledge:
                 {context_text or "No relevant knowledge retrieved."}
-
+                {cross_channel_block}
                 {tool_text}
 
                 Conversation:

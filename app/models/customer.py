@@ -21,6 +21,18 @@ class Customer(db.Model):
         back_populates="customer",
         cascade="all, delete-orphan",
     )
+
+    channel_identities = db.relationship(
+        "CustomerChannelIdentity",
+        back_populates="customer",
+        cascade="all, delete-orphan",
+    )
+
+    conversations = db.relationship(
+        "Conversation",
+        back_populates="customer",
+        cascade="all, delete-orphan",
+    )
     
     # Object Representation when printing or debugging
     def __repr__(self):

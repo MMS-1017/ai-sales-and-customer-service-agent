@@ -10,6 +10,7 @@ An AI-powered sales and customer service assistant for an electronics e-commerce
 
 - [Features](#features)
 - [Architecture](#architecture)
+- [Omnichannel Architecture](#omnichannel-architecture)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Database Design](#database-design)
@@ -113,6 +114,66 @@ Customer Message (Text, Image, or Audio)
 | Service | `app/services/` | Business rules, 5-stage product matching, transactions, media processing |
 | Agent | `app/agent/` | LangGraph workflow, state, nodes, routing, tools, prompts |
 | RAG | `app/rag/` | Embeddings, deterministic chunking, ChromaDB, similarity retrieval |
+
+---
+
+## Omnichannel Architecture
+
+The application implements a unified, channel-agnostic Omnichannel pipeline connecting **WhatsApp (WAHA)**, **Facebook Messenger**, and **Website Chat** to the shared LangGraph AI agent without duplicating business logic or embedding channel conditionals inside the agent.
+
+### Message Lifecycle
+
+```text
+Incoming Webhook / Website Message
+        │
+        ▼
+  ChannelAdapter (verify_webhook → parse_incoming)
+        │
+        ▼
+  UnifiedIncomingMessage (Pydantic v2 normalized schema)
+        │
+        ▼
+  DB Idempotency Check (in-memory LRU + partial unique DB index)
+        │
+        ▼
+  CustomerIdentityService (CustomerChannelIdentity resolution, no unsafe auto-merge)
+        │
+        ▼
+  ConversationService (channel-scoped Conversation + controlled cross-channel context)
+        │
+        ▼
+  MediaService + Message Persistence (Message & MessageAttachment)
+        │
+        ▼
+  LangGraph AI Agent (channel-independent)
+        │
+        ▼
+  OutboundMessagingService (retries, chunking, duplicate delivery guard)
+        │
+        ▼
+  ChannelAdapter.send_message() → Customer
+```
+
+### Omnichannel Modules & Database Entities
+
+- **Schemas (`app/schemas/channel_message.py`)**: `UnifiedIncomingMessage`, `UnifiedOutboundMessage`, `UnifiedAttachment`, `UnifiedAgentResponse`.
+- **Adapters (`app/channels/`)**: `ChannelAdapter` (`base.py`), `ChannelRegistry` (`registry.py`), `ChannelDispatcher` (`dispatcher.py`), `WhatsAppAdapter`, `MessengerAdapter`, `WebChatAdapter`.
+- **Identity & Persistence (`app/models/`)**:
+  - `customer_channel_identities` (`CustomerChannelIdentity`): Unique constraint on `(channel, channel_account_id, external_user_id)`.
+  - `conversations` (`Conversation`): Tracks channel-specific threads per customer (`status`, `last_message_at`).
+  - `messages` (`Message`) & `message_attachments` (`MessageAttachment`): Persistent inbound/outbound records with a partial unique index for inbound `external_message_id` idempotency.
+- **Migration Helper**: Run `python -m scripts.migrate_omnichannel` on existing deployments to create the new tables and backfill legacy synthetic customer identities.
+
+### Admin Omnichannel Tools
+
+- `GET /admin/customers` & `POST /admin/customers/link-identity` — Inspect linked channel identities per customer and explicitly associate identities across channels.
+- `GET /admin/conversations` — View persistent cross-channel conversations and message counts.
+
+### How to Add a New Channel (e.g. Telegram)
+
+1. Create `app/channels/telegram_adapter.py` subclassing `ChannelAdapter` (`verify_webhook`, `parse_incoming`, `download_attachment`, `send_message`).
+2. Register `registry.register(TelegramAdapter())` inside `get_channel_registry()` in `app/channels/registry.py`.
+3. Point the provider's webhook to `POST /webhooks/channel/telegram` (or register an optional Blueprint wrapper). Core AI logic, identity resolution, conversation history, and outbound retry handling work automatically.
 
 ---
 
@@ -707,18 +768,21 @@ The webhook maps each WhatsApp chat to a customer record and invokes the existin
 | `POST` | `/admin/products/<id>/edit` | Edit product |
 | `POST` | `/admin/products/<id>/deactivate` | Deactivate product |
 | `GET` | `/admin/orders` | List orders |
-| `GET` | `/admin/customers` | List customers |
+| `GET` | `/admin/customers` | List customers & linked channel identities |
+| `POST` | `/admin/customers/link-identity` | Link channel identity to a customer |
+| `GET` | `/admin/conversations` | Inspect omnichannel conversation threads |
 | `GET` | `/admin/knowledge` | List knowledge documents |
 | `POST` | `/admin/knowledge/create` | Add document (syncs RAG) |
 | `POST` | `/admin/knowledge/<id>/edit` | Update document (syncs RAG) |
 | `POST` | `/admin/knowledge/<id>/delete` | Delete document (syncs RAG) |
 
-### Facebook Messenger
+### Facebook Messenger & Extensible Webhooks
 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/webhooks/facebook` | Webhook verification |
 | `POST` | `/webhooks/facebook` | Receive Messenger events |
+| `POST` | `/webhooks/channel/<channel_name>` | Dynamic webhook endpoint for registered channel adapters |
 
 ---
 
@@ -763,6 +827,15 @@ CHROMA_PATH=./chroma_data
 
 # Admin UI timezone (e.g. Asia/Riyadh, Europe/Istanbul, America/New_York)
 DISPLAY_TIMEZONE=UTC
+
+# Admin Dashboard Authentication
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change_this_admin_password
+ADMIN_AUTH_ENABLED=true
+
+# Omnichannel Webhook Security & Async Processing
+REQUIRE_WEBHOOK_SECRETS=false
+WEBHOOK_ASYNC_PROCESSING=false
 
 # WhatsApp / WAHA Integration
 WAHA_BASE_URL=http://localhost:3000

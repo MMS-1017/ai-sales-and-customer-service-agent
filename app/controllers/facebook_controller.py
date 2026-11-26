@@ -1,54 +1,11 @@
-import collections
-import logging
-import mimetypes
-import threading
-import requests
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, request
 
-from app.agent import agent_graph
-from app.config import Config
-from app.extensions import db
-from app.models import Customer
-from app.services.conversation_service import ConversationService
-from app.services.facebook_service import FacebookService
-from app.services.media_service import MediaService
-
-logger = logging.getLogger(__name__)
-
-
-class WebhookDeduplicator:
-    def __init__(self, maxsize: int = 2000):
-        self._maxsize = maxsize
-        self._seen = set()
-        self._order = collections.deque()
-        self._lock = threading.Lock()
-
-    def is_duplicate(self, message_id: str | None) -> bool:
-        if not message_id:
-            return False
-        with self._lock:
-            if message_id in self._seen:
-                return True
-            self._seen.add(message_id)
-            self._order.append(message_id)
-            if len(self._order) > self._maxsize:
-                oldest = self._order.popleft()
-                self._seen.discard(oldest)
-            return False
-
-    def remove(self, message_id: str | None) -> None:
-        if not message_id:
-            return
-        with self._lock:
-            self._seen.discard(message_id)
-            try:
-                self._order.remove(message_id)
-            except ValueError:
-                pass
-
+from app.channels.dispatcher import handle_channel_request
+from app.channels.messenger_adapter import MessengerAdapter
+from app.schemas import ChannelType
+from app.services.channel_service import WebhookDeduplicator
 
 webhook_deduplicator = WebhookDeduplicator()
-
 
 facebook_bp = Blueprint(
     "facebook",
@@ -58,171 +15,14 @@ facebook_bp = Blueprint(
 
 @facebook_bp.get("/webhooks/facebook")
 def verify_facebook_webhook():
-    mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
-
-    if (
-        mode == "subscribe"
-        and token == Config.FACEBOOK_VERIFY_TOKEN
-    ):
-        return challenge, 200
-
-    return "Forbidden", 403
+    adapter = MessengerAdapter()
+    return adapter.verify_subscription_challenge(request)
 
 
 @facebook_bp.post("/webhooks/facebook")
 def facebook_webhook():
-    raw_body = request.get_data()
-
-    signature = request.headers.get(
-        "X-Hub-Signature-256"
+    return handle_channel_request(
+        ChannelType.MESSENGER.value,
+        request,
+        deduplicator=webhook_deduplicator,
     )
-
-    if not FacebookService.verify_signature(
-        raw_body,
-        signature,
-    ):
-        return jsonify({
-            "success": False,
-            "error": "Invalid webhook signature.",
-        }), 403
-
-    data = request.get_json(silent=True) or {}
-
-    if data.get("object") != "page":
-        return jsonify({
-            "success": False,
-            "error": "Invalid webhook object.",
-        }), 400
-
-    for entry in data.get("entry", []):
-        for messaging_event in entry.get(
-            "messaging",
-            [],
-        ):
-            process_message(messaging_event)
-
-    return "EVENT_RECEIVED", 200
-
-
-def process_message(event):
-    sender = event.get("sender", {})
-    sender_id = sender.get("id")
-
-    message = event.get("message", {})
-    mid = message.get("mid")
-    if mid and webhook_deduplicator.is_duplicate(str(mid)):
-        logger.info("Ignoring duplicate Facebook message mid=%s", mid)
-        return
-
-    text = (message.get("text") or "").strip()
-    attachments = message.get("attachments") or []
-
-    if not sender_id or (not text and not attachments):
-        return
-
-    try:
-        customer = get_or_create_facebook_customer(sender_id)
-        conversation_id = f"facebook:{sender_id}"
-        history = ConversationService.get_history(conversation_id)
-
-        # Process any media attachments (images, audio clips, or voice notes)
-        media_context = []
-        for att in attachments:
-            att_type = att.get("type")  # "image", "audio", or "video"
-            if att_type in ("image", "audio", "video"):
-                media_url = (att.get("payload") or {}).get("url")
-                if media_url:
-                    try:
-                        res = requests.get(media_url, timeout=30)
-                        res.raise_for_status()
-                        content = res.content
-                        raw_mime = res.headers.get("Content-Type", "")
-                        mime_type = raw_mime.split(";", 1)[0].strip().lower()
-                        media_type = "audio" if att_type in ("audio", "video") else "image"
-
-                        ext = mimetypes.guess_extension(mime_type)
-                        if not ext:
-                            if "mp4" in mime_type:
-                                ext = ".mp4"
-                            elif "ogg" in mime_type or "opus" in mime_type:
-                                ext = ".ogg"
-                            elif "wav" in mime_type:
-                                ext = ".wav"
-                            elif "webm" in mime_type:
-                                ext = ".webm"
-                            else:
-                                ext = ".jpg" if media_type == "image" else ".mp4"
-
-                        file_name = f"fb_{sender_id}_{media_type}{ext}"
-
-                        record, processed_text = MediaService.save_and_process(
-                            file_name=file_name,
-                            content=content,
-                            mime_type=mime_type,
-                            media_type=media_type,
-                            customer_id=customer.id,
-                            source="facebook",
-                        )
-                        label = "Image analysis" if media_type == "image" else "Audio transcription"
-                        if processed_text:
-                            media_context.append(f"[{label}: {processed_text}]")
-                        else:
-                            media_context.append(f"[Customer sent a {att_type}]")
-                    except Exception as err:
-                        print(f"[FB MEDIA ERROR] Failed to download/process {att_type}: {err}")
-
-        full_message = "\n".join(part for part in [text] + media_context if part).strip()
-        if not full_message:
-            return
-
-        result = agent_graph.invoke({
-            "messages": history + [full_message],
-            "customer_id": customer.id,
-        })
-
-        response = result.get(
-            "response",
-            "Sorry, I couldn't process your request.",
-        )
-
-        ConversationService.add_message(conversation_id, full_message)
-        ConversationService.add_message(conversation_id, response)
-
-        FacebookService.send_message(
-            sender_id,
-            response,
-        )
-
-    except Exception as exc:
-        if mid:
-            webhook_deduplicator.remove(str(mid))
-        import traceback
-        print(f"[FB ERROR] Processing message from {sender_id}: {exc}")
-        traceback.print_exc()
-        # Print Facebook API response body if available
-        if hasattr(exc, "response") and exc.response is not None:
-            print(f"[FB API RESPONSE] Status: {exc.response.status_code}")
-            print(f"[FB API RESPONSE] Body: {exc.response.text}")
-
-
-def get_or_create_facebook_customer(sender_id):
-    email = f"facebook_{sender_id}@facebook.local"
-
-    customer = Customer.query.filter_by(
-        email=email
-    ).first()
-
-    if customer:
-        return customer
-
-    customer = Customer(
-        name=f"Facebook User {sender_id}",
-        email=email,
-    )
-
-    db.session.add(customer)
-    db.session.commit()
-
-    return customer

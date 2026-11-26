@@ -4,7 +4,18 @@ from datetime import timezone as _utc
 
 from app.config import Config
 from app.extensions import db
-from app.models import Customer, Product, Order, OrderItem, KnowledgeDocument, MediaFile
+from app.models import (
+    Customer,
+    CustomerChannelIdentity,
+    Conversation,
+    Message,
+    MessageAttachment,
+    Product,
+    Order,
+    OrderItem,
+    KnowledgeDocument,
+    MediaFile,
+)
 
 # Blueprints responsible for routes
 from app.controllers.chat_controller import chat_bp
@@ -12,6 +23,7 @@ from app.controllers.admin_controller import admin_bp
 from app.controllers.facebook_controller import facebook_bp
 from app.controllers.whatsapp_controller import whatsapp_bp
 from app.controllers.media_controller import media_bp
+from app.channels.dispatcher import omnichannel_bp
 
 
 def create_app(test_config=None):
@@ -32,6 +44,7 @@ def create_app(test_config=None):
     app.register_blueprint(facebook_bp)
     app.register_blueprint(whatsapp_bp)
     app.register_blueprint(media_bp)
+    app.register_blueprint(omnichannel_bp)
 
     # Connect to database through SQLAlchemy
     db.init_app(app)

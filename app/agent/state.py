@@ -4,6 +4,8 @@ class AgentState(TypedDict, total=False):
     messages: list
     intent: str
     customer_id: int | None
+    customer_profile: dict | None
+    cross_channel_context: list[str] | None
 
     retrieved_context: list
 

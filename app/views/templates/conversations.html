@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omnichannel Conversations - Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .admin-page { width: min(1200px, 95%); margin: 30px auto; }
+        .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 15px; flex-wrap: wrap; }
+        .admin-header a { text-decoration: none; color: #2563eb; font-weight: 600; }
+        .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; background: white; padding: 14px 16px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 18px; }
+        .filter-bar input, .filter-bar select { padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+        .filter-bar button { padding: 8px 14px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+        .filter-bar .reset-link { color: #6b7280; text-decoration: none; font-size: 14px; margin-left: 4px; }
+        .data-table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; }
+        .data-table th, .data-table td { padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+        .data-table th { background: #1f2937; color: white; }
+        .data-table tr:hover { background: #f8fafc; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #e0e7ff; color: #1e40af; }
+        .badge-whatsapp { background: #dcfce7; color: #166534; }
+        .badge-facebook { background: #dbeafe; color: #1d4ed8; }
+        .badge-web_chat { background: #f3e8ff; color: #6b21a8; }
+        .preview-text { color: #4b5563; font-size: 13px; max-width: 340px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .view-btn { display: inline-block; padding: 6px 12px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+        .view-btn:hover { background: #1d4ed8; }
+        .empty { padding: 20px; background: white; border: 1px solid #e5e7eb; border-radius: 8px; }
+    </style>
+</head>
+
+<body>
+<div class="admin-page">
+    <div class="admin-header">
+        <div>
+            <h1>Omnichannel Conversations</h1>
+            <p>Browse and inspect saved chats across WhatsApp, Messenger, and Website Chat.</p>
+        </div>
+        <div style="display:flex;gap:16px;align-items:center;">
+            <a href="{{ url_for('admin.customers') }}">Customers</a>
+            <a href="{{ url_for('admin.dashboard') }}">← Dashboard</a>
+        </div>
+    </div>
+
+    <form method="get" action="{{ url_for('admin.conversations') }}" class="filter-bar">
+        <select name="channel">
+            <option value="">All Channels</option>
+            {% for ch in channels %}
+                <option value="{{ ch }}" {% if selected_channel == ch %}selected{% endif %}>{{ ch }}</option>
+            {% endfor %}
+        </select>
+
+        <input
+            type="number"
+            name="customer_id"
+            placeholder="Customer ID"
+            value="{{ selected_customer_id if selected_customer_id is not none else '' }}"
+            style="width:130px;"
+        >
+
+        <input
+            type="text"
+            name="q"
+            placeholder="Search message text, customer, or thread ID..."
+            value="{{ search_query or '' }}"
+            style="flex:1;min-width:220px;"
+        >
+
+        <button type="submit">Filter</button>
+        {% if selected_channel or selected_customer_id is not none or search_query %}
+            <a href="{{ url_for('admin.conversations') }}" class="reset-link">Clear</a>
+        {% endif %}
+    </form>
+
+    {% if conversations %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Channel</th>
+                <th>Customer</th>
+                <th>External Thread</th>
+                <th>Last Message</th>
+                <th>Messages</th>
+                <th>Status</th>
+                <th>Last Activity</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for conv in conversations %}
+            {% set last_msg = conv.messages[-1] if conv.messages else none %}
+            <tr>
+                <td>#{{ conv.id }}</td>
+                <td>
+                    <span class="badge badge-{{ conv.channel }}">{{ conv.channel }}</span>
+                </td>
+                <td>
+                    <a href="{{ url_for('admin.conversations', customer_id=conv.customer_id) }}" style="color:#111827;text-decoration:none;font-weight:600;">
+                        {{ conv.customer.name if conv.customer else 'Customer' }} (#{{ conv.customer_id }})
+                    </a>
+                </td>
+                <td style="font-family:monospace;font-size:12px;">{{ conv.external_conversation_id }}</td>
+                <td>
+                    {% if last_msg %}
+                        <div class="preview-text" title="{{ last_msg.content }}">
+                            <strong>{{ 'Customer' if last_msg.role == 'customer' else 'Agent' }}:</strong>
+                            {{ last_msg.content or '[attachment]' }}
+                        </div>
+                    {% else %}
+                        <span style="color:#9ca3af;font-size:13px;">No messages</span>
+                    {% endif %}
+                </td>
+                <td>{{ conv.messages|length }}</td>
+                <td>{{ conv.status }}</td>
+                <td>{{ conv.last_message_at | localtime }}</td>
+                <td>
+                    <a href="{{ url_for('admin.conversation_detail', conversation_id=conv.id) }}" class="view-btn">View Chat</a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <div class="empty">No conversations match your current filter.</div>
+    {% endif %}
+</div>
+</body>
+</html>

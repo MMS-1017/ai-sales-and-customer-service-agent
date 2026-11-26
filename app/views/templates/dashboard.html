@@ -73,7 +73,7 @@
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
             gap: 20px;
             margin-bottom: 35px;
         }
@@ -190,6 +190,10 @@
             Customers
         </a>
 
+        <a href="{{ url_for('admin.conversations') }}">
+            Conversations
+        </a>
+
         <a href="{{ url_for('admin.knowledge') }}">
             Knowledge Base
         </a>
@@ -239,6 +243,17 @@
 
                     <div class="stat-value">
                         {{ stats.customers }}
+                    </div>
+
+                </div>
+
+
+                <div class="stat-card">
+
+                    <h3>Conversations</h3>
+
+                    <div class="stat-value">
+                        {{ stats.conversations }}
                     </div>
 
                 </div>
@@ -298,7 +313,19 @@
                     <strong>View Customers</strong>
 
                     <span>
-                        Review customers and their order history.
+                        Review customers, linked identities, and orders.
+                    </span>
+                </a>
+
+
+                <a
+                    class="quick-link"
+                    href="{{ url_for('admin.conversations') }}"
+                >
+                    <strong>Omnichannel Conversations</strong>
+
+                    <span>
+                        Inspect cross-channel message threads and status.
                     </span>
                 </a>
 
