@@ -2,7 +2,7 @@
 
 from app import create_app
 from app.extensions import db
-from app.models import Customer, CustomerChannelIdentity
+from app.models import Customer, CustomerChannelIdentity, ensure_schema_columns
 
 
 def run_omnichannel_migration():
@@ -10,6 +10,7 @@ def run_omnichannel_migration():
     app = create_app()
     with app.app_context():
         db.create_all()
+        ensure_schema_columns()
         backfilled = 0
 
         for customer in Customer.query.all():

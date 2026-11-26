@@ -25,6 +25,9 @@
         .preview-text { color: #4b5563; font-size: 13px; max-width: 340px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .view-btn { display: inline-block; padding: 6px 12px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 600; white-space: nowrap; }
         .view-btn:hover { background: #1d4ed8; }
+        .mode-btn { padding: 4px 10px; border-radius: 999px; border: 1px solid #d1d5db; cursor: pointer; font-size: 12px; font-weight: 600; }
+        .mode-agent { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+        .mode-admin { background: #ecfdf5; color: #047857; border-color: #6ee7b7; }
         .empty { padding: 20px; background: white; border: 1px solid #e5e7eb; border-radius: 8px; }
     </style>
 </head>
@@ -81,6 +84,7 @@
                 <th>Customer</th>
                 <th>External Thread</th>
                 <th>Last Message</th>
+                <th>Responder</th>
                 <th>Messages</th>
                 <th>Status</th>
                 <th>Last Activity</th>
@@ -90,6 +94,7 @@
         <tbody>
         {% for conv in conversations %}
             {% set last_msg = conv.messages[-1] if conv.messages else none %}
+            {% set mode = conv.response_mode or 'agent' %}
             <tr>
                 <td>#{{ conv.id }}</td>
                 <td>
@@ -104,12 +109,20 @@
                 <td>
                     {% if last_msg %}
                         <div class="preview-text" title="{{ last_msg.content }}">
-                            <strong>{{ 'Customer' if last_msg.role == 'customer' else 'Agent' }}:</strong>
+                            <strong>{{ 'Customer' if last_msg.role == 'customer' else ('Admin' if last_msg.role == 'admin' else 'Agent') }}:</strong>
                             {{ last_msg.content or '[attachment]' }}
                         </div>
                     {% else %}
                         <span style="color:#9ca3af;font-size:13px;">No messages</span>
                     {% endif %}
+                </td>
+                <td>
+                    <form action="{{ url_for('admin.toggle_conversation_mode', conversation_id=conv.id) }}" method="post" style="margin:0;">
+                        <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+                        <button type="submit" class="mode-btn mode-{{ mode }}" title="Click to switch between AI Agent and Admin">
+                            {{ '👤 Admin' if mode == 'admin' else '🤖 Agent' }}
+                        </button>
+                    </form>
                 </td>
                 <td>{{ conv.messages|length }}</td>
                 <td>{{ conv.status }}</td>

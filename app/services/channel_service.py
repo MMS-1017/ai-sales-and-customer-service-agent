@@ -187,6 +187,7 @@ class ChannelService:
             channel=incoming.channel,
             external_conversation_id=incoming.conversation_id,
             channel_account_id=incoming.channel_account_id,
+            metadata={"external_user_id": incoming.external_user_id},
         )
         history = ConversationService.get_conversation_history(conversation.id)
         cross_channel_context = ConversationService.get_cross_channel_context(
@@ -214,6 +215,27 @@ class ChannelService:
                 reply_to_message_id=incoming.external_message_id,
                 delivery_status="duplicate_ignored",
                 error="duplicate_message",
+            )
+
+        # 5b. Human Takeover Mode: persist inbound message but pause AI auto-replies
+        if (conversation.response_mode or "agent") == "admin":
+            inbound_record.delivery_status = "waiting_for_admin"
+            db.session.commit()
+            logger.info(
+                "Human handoff active for conv=%s (%s): skipping AI auto-reply",
+                conversation.id,
+                incoming.channel,
+            )
+            return UnifiedAgentResponse(
+                success=True,
+                channel=incoming.channel,
+                conversation_id=incoming.conversation_id,
+                db_conversation_id=conversation.id,
+                customer_id=customer.id,
+                response="",
+                media_records=media_records,
+                reply_to_message_id=incoming.external_message_id,
+                delivery_status="human_handoff",
             )
 
         # 6. Execute Unified Channel-Independent LangGraph AI Agent
@@ -275,4 +297,33 @@ class ChannelService:
             reply_to_message_id=incoming.external_message_id,
             outbound_message_id=outbound_ext_id,
             delivery_status=delivery_status,
+        )
+
+    @classmethod
+    def send_admin_reply(
+        cls,
+        conversation,
+        text: str,
+        *,
+        registry: ChannelRegistry | None = None,
+    ):
+        """Send a manual admin message to a customer through the conversation's channel adapter."""
+        cleaned = (text or "").strip()
+        if not cleaned:
+            raise ValueError("Reply message cannot be empty.")
+
+        recipient_id = ConversationService.resolve_recipient_id(conversation)
+        outbound = UnifiedOutboundMessage(
+            channel=conversation.channel,
+            channel_account_id=conversation.channel_account_id or "",
+            recipient_id=recipient_id,
+            conversation_id=conversation.id,
+            text=cleaned,
+            metadata={"sent_by": "admin"},
+        )
+        return OutboundMessagingService.send(
+            outbound,
+            conversation=conversation,
+            registry=registry,
+            role="admin",
         )

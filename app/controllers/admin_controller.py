@@ -1,12 +1,12 @@
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, current_app, render_template, request, redirect, url_for
+from flask import Blueprint, current_app, jsonify, render_template, request, redirect, url_for
 from sqlalchemy import or_
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
 from app.models import Conversation, Customer, KnowledgeDocument, Message, Order, Product
-from app.services import CustomerIdentityService, KnowledgeService
+from app.services import ChannelService, ConversationService, CustomerIdentityService, KnowledgeService
 from app.services.identity_service import CustomerNotFoundError, IdentityConflictError
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -308,6 +308,104 @@ def conversation_detail(conversation_id: int):
         "conversation_detail.html",
         conversation=conv,
         other_conversations=other_conversations,
+        delivery_status=request.args.get("delivery_status", ""),
+        delivery_error=request.args.get("delivery_error", ""),
+    )
+
+
+@admin_bp.post("/conversations/<int:conversation_id>/toggle-mode")
+def toggle_conversation_mode(conversation_id: int):
+    conv = db.session.get(Conversation, conversation_id)
+    if not conv:
+        return "Conversation not found.", 404
+
+    requested_mode = (request.form.get("mode") or "").strip().lower()
+    if requested_mode in ConversationService.VALID_RESPONSE_MODES:
+        next_mode = requested_mode
+    else:
+        next_mode = "admin" if (conv.response_mode or "agent") == "agent" else "agent"
+
+    ConversationService.set_response_mode(conv, next_mode)
+
+    next_url = (request.form.get("next") or "").strip()
+    if next_url.startswith("/admin/conversations"):
+        return redirect(next_url)
+    return redirect(url_for("admin.conversation_detail", conversation_id=conv.id))
+
+
+@admin_bp.post("/conversations/<int:conversation_id>/reply")
+def reply_to_conversation(conversation_id: int):
+    conv = db.session.get(Conversation, conversation_id)
+    if not conv:
+        return "Conversation not found.", 404
+
+    message_text = (request.form.get("message") or "").strip()
+    if not message_text:
+        return "Reply message cannot be empty.", 400
+
+    result = ChannelService.send_admin_reply(conv, message_text)
+    if not result.success:
+        return redirect(
+            url_for(
+                "admin.conversation_detail",
+                conversation_id=conv.id,
+                delivery_status=result.delivery_status,
+                delivery_error=result.error or "Delivery failed",
+            )
+        )
+
+    return redirect(url_for("admin.conversation_detail", conversation_id=conv.id))
+
+
+@admin_bp.get("/conversations/<int:conversation_id>/messages")
+def conversation_messages_json(conversation_id: int):
+    conv = db.session.get(Conversation, conversation_id)
+    if not conv:
+        return jsonify({"success": False, "error": "Conversation not found."}), 404
+
+    try:
+        after_id = int(request.args.get("after_id") or 0)
+    except ValueError:
+        after_id = 0
+
+    new_messages = (
+        Message.query.options(selectinload(Message.attachments))
+        .filter(Message.conversation_id == conv.id, Message.id > after_id)
+        .order_by(Message.id.asc())
+        .all()
+    )
+    localtime = current_app.jinja_env.filters["localtime"]
+
+    return jsonify(
+        {
+            "success": True,
+            "response_mode": conv.response_mode or "agent",
+            "messages": [
+                {
+                    "id": m.id,
+                    "role": m.role,
+                    "content": m.content,
+                    "delivery_status": m.delivery_status,
+                    "external_message_id": m.external_message_id,
+                    "created_at_display": localtime(m.created_at),
+                    "attachments": [
+                        {
+                            "media_type": att.media_type,
+                            "file_name": att.file_name,
+                            "media_url": url_for("media.get_media_file", media_id=att.media_file_id)
+                            if att.media_file_id
+                            else None,
+                            "download_url": url_for("media.get_media_file", media_id=att.media_file_id, download=1)
+                            if att.media_file_id
+                            else None,
+                            "external_url": att.external_url,
+                        }
+                        for att in m.attachments
+                    ],
+                }
+                for m in new_messages
+            ],
+        }
     )
 
 # =========================

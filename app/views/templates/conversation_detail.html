@@ -11,32 +11,47 @@
         .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; gap: 12px; flex-wrap: wrap; }
         .top-nav a { text-decoration: none; color: #2563eb; font-weight: 600; }
         .conv-meta-card { background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px 20px; margin-bottom: 18px; }
-        .conv-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 10px; font-size: 14px; }
+        .conv-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 12px; font-size: 14px; }
         .meta-label { color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
         .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #e0e7ff; color: #1e40af; }
         .badge-whatsapp { background: #dcfce7; color: #166534; }
         .badge-facebook { background: #dbeafe; color: #1d4ed8; }
         .badge-web_chat { background: #f3e8ff; color: #6b21a8; }
+        .mode-toggle-group { display: inline-flex; border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden; background: #f3f4f6; }
+        .mode-toggle-btn { padding: 7px 14px; border: none; background: transparent; cursor: pointer; font-size: 13px; font-weight: 600; color: #4b5563; }
+        .mode-toggle-btn.active-agent { background: #2563eb; color: white; }
+        .mode-toggle-btn.active-admin { background: #059669; color: white; }
+        .mode-banner { padding: 11px 15px; border-radius: 8px; margin-bottom: 14px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .mode-banner-agent { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+        .mode-banner-admin { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+        .error-banner { padding: 11px 15px; border-radius: 8px; margin-bottom: 14px; font-size: 14px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
         .other-threads { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e5e7eb; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
         .thread-pill { display: inline-block; padding: 4px 10px; border: 1px solid #d1d5db; border-radius: 6px; text-decoration: none; color: #111827; font-size: 13px; background: #f9fafb; }
         .thread-pill:hover { border-color: #2563eb; color: #2563eb; }
-        .transcript-box { background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+        .transcript-box { background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 14px; max-height: 62vh; overflow-y: auto; }
         .msg-row { display: flex; flex-direction: column; max-width: 78%; }
         .msg-row.customer { align-self: flex-end; align-items: flex-end; }
-        .msg-row.assistant, .msg-row.system { align-self: flex-start; align-items: flex-start; }
-        .msg-bubble { padding: 12px 15px; border-radius: 10px; white-space: pre-wrap; line-height: 1.5; word-break: break-word; }
-        .msg-row.customer .msg-bubble { background: #2563eb; color: white; }
-        .msg-row.assistant .msg-bubble { background: #f3f4f6; color: #111827; border: 1px solid #e5e7eb; }
+        .msg-row.assistant, .msg-row.admin, .msg-row.system { align-self: flex-start; align-items: flex-start; }
+        .msg-bubble { padding: 12px 15px; border-radius: 10px; line-height: 1.5; word-break: break-word; }
+        .msg-text { white-space: pre-wrap; margin: 0; }
+        .msg-row.customer .msg-bubble { background: #f3f4f6; color: #111827; border: 1px solid #e5e7eb; }
+        .msg-row.assistant .msg-bubble, .msg-row.admin .msg-bubble { background: #2563eb; color: white; }
         .msg-row.system .msg-bubble { background: #fef3c7; color: #92400e; }
         .msg-meta { font-size: 11px; color: #6b7280; margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
         .att-box { margin-bottom: 8px; padding: 8px; border-radius: 8px; background: rgba(0, 0, 0, 0.08); }
         .att-box img { max-width: 260px; max-height: 220px; border-radius: 6px; display: block; margin-bottom: 6px; }
         .att-box audio { max-width: 260px; display: block; margin-bottom: 6px; }
         .att-link { font-size: 12px; color: inherit; text-decoration: underline; }
+        .reply-card { background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px 20px; margin-top: 14px; }
+        .reply-form { display: flex; gap: 10px; align-items: flex-end; }
+        .reply-form textarea { flex: 1; min-height: 54px; max-height: 160px; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; font-size: 14px; resize: vertical; }
+        .reply-submit { padding: 12px 18px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        .reply-submit:hover { background: #1d4ed8; }
     </style>
 </head>
 
 <body>
+{% set mode = conversation.response_mode or 'agent' %}
 <div class="admin-page">
     <div class="top-nav">
         <a href="{{ url_for('admin.conversations') }}">← All Conversations</a>
@@ -48,12 +63,21 @@
     </div>
 
     <div class="conv-meta-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-            <h1 style="margin:0;font-size:22px;">
-                Conversation #{{ conversation.id }}
-                <span class="badge badge-{{ conversation.channel }}" style="margin-left:8px;">{{ conversation.channel }}</span>
-            </h1>
-            <span style="font-size:13px;color:#4b5563;">Status: <strong>{{ conversation.status }}</strong></span>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <h1 style="margin:0;font-size:22px;">Conversation #{{ conversation.id }}</h1>
+                <span class="badge badge-{{ conversation.channel }}">{{ conversation.channel }}</span>
+                <span style="font-size:13px;color:#4b5563;">Status: <strong>{{ conversation.status }}</strong></span>
+            </div>
+
+            <form action="{{ url_for('admin.toggle_conversation_mode', conversation_id=conversation.id) }}" method="post" class="mode-toggle-group" aria-label="Responder mode toggle">
+                <button type="submit" name="mode" value="agent" class="mode-toggle-btn {% if mode == 'agent' %}active-agent{% endif %}">
+                    🤖 Agent
+                </button>
+                <button type="submit" name="mode" value="admin" class="mode-toggle-btn {% if mode == 'admin' %}active-admin{% endif %}">
+                    👤 Admin
+                </button>
+            </form>
         </div>
 
         <div class="conv-meta-grid">
@@ -100,10 +124,34 @@
         {% endif %}
     </div>
 
-    <div class="transcript-box">
+    {% if delivery_error %}
+    <div class="error-banner">
+        <strong>Outbound delivery error ({{ delivery_status or 'failed' }}):</strong> {{ delivery_error }}
+    </div>
+    {% endif %}
+
+    {% if mode == 'admin' %}
+    <div class="mode-banner mode-banner-admin">
+        <span><strong>👤 Admin Mode Active:</strong> AI Agent auto-replies are paused for this conversation. New customer messages are saved here for you to answer.</span>
+        <form action="{{ url_for('admin.toggle_conversation_mode', conversation_id=conversation.id) }}" method="post" style="margin:0;">
+            <input type="hidden" name="mode" value="agent">
+            <button type="submit" style="padding:5px 11px;border:1px solid #047857;background:white;color:#047857;border-radius:6px;cursor:pointer;font-weight:600;">Switch Back to Agent</button>
+        </form>
+    </div>
+    {% else %}
+    <div class="mode-banner mode-banner-agent">
+        <span><strong>🤖 AI Agent Mode Active:</strong> The AI Agent automatically replies to incoming customer messages.</span>
+        <form action="{{ url_for('admin.toggle_conversation_mode', conversation_id=conversation.id) }}" method="post" style="margin:0;">
+            <input type="hidden" name="mode" value="admin">
+            <button type="submit" style="padding:5px 11px;border:1px solid #1d4ed8;background:white;color:#1d4ed8;border-radius:6px;cursor:pointer;font-weight:600;">Take Over as Admin</button>
+        </form>
+    </div>
+    {% endif %}
+
+    <div id="transcript-box" class="transcript-box">
         {% if conversation.messages %}
             {% for msg in conversation.messages %}
-                <div class="msg-row {{ msg.role }}">
+                <div class="msg-row {{ msg.role }}" data-msg-id="{{ msg.id }}">
                     <div class="msg-bubble">
                         {% if msg.attachments %}
                             {% for att in msg.attachments %}
@@ -127,10 +175,12 @@
                                 </div>
                             {% endfor %}
                         {% endif %}
-                        {{ msg.content }}
+                        {% if msg.content %}
+                            <div class="msg-text" dir="auto">{{ msg.content }}</div>
+                        {% endif %}
                     </div>
                     <div class="msg-meta">
-                        <span><strong>{{ 'Customer' if msg.role == 'customer' else ('Agent' if msg.role == 'assistant' else msg.role) }}</strong></span>
+                        <span><strong>{{ 'Customer' if msg.role == 'customer' else ('Admin (You)' if msg.role == 'admin' else ('Agent' if msg.role == 'assistant' else msg.role)) }}</strong></span>
                         <span>{{ msg.created_at | localtime }}</span>
                         <span>{{ msg.delivery_status }}</span>
                         {% if msg.external_message_id %}
@@ -140,9 +190,139 @@
                 </div>
             {% endfor %}
         {% else %}
-            <p style="color:#6b7280;margin:0;">No messages recorded in this conversation yet.</p>
+            <p id="empty-transcript" style="color:#6b7280;margin:0;">No messages recorded in this conversation yet.</p>
         {% endif %}
     </div>
+
+    {% if mode == 'admin' %}
+    <div class="reply-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+            <strong style="font-size:14px;">Reply directly to customer via {{ conversation.channel }}</strong>
+        </div>
+        <form action="{{ url_for('admin.reply_to_conversation', conversation_id=conversation.id) }}" method="post" class="reply-form">
+            <textarea name="message" placeholder="Type your message to the customer..." required></textarea>
+            <button type="submit" class="reply-submit">Send as Admin</button>
+        </form>
+    </div>
+    {% endif %}
 </div>
+
+<script>
+(function () {
+    const box = document.getElementById("transcript-box");
+    if (!box) return;
+    box.scrollTop = box.scrollHeight;
+
+    let lastMsgId = {{ conversation.messages[-1].id if conversation.messages else 0 }};
+    const messagesUrl = "{{ url_for('admin.conversation_messages_json', conversation_id=conversation.id) }}";
+
+    function roleLabel(role) {
+        if (role === "customer") return "Customer";
+        if (role === "admin") return "Admin (You)";
+        if (role === "assistant") return "Agent";
+        return role;
+    }
+
+    function appendMessage(m) {
+        const emptyEl = document.getElementById("empty-transcript");
+        if (emptyEl) emptyEl.remove();
+
+        const row = document.createElement("div");
+        row.className = "msg-row " + m.role;
+        row.dataset.msgId = String(m.id);
+
+        const bubble = document.createElement("div");
+        bubble.className = "msg-bubble";
+
+        for (const att of (m.attachments || [])) {
+            const attBox = document.createElement("div");
+            attBox.className = "att-box";
+            if (att.media_url) {
+                if (att.media_type === "image") {
+                    const img = document.createElement("img");
+                    img.src = att.media_url;
+                    img.alt = att.file_name || "Image attachment";
+                    attBox.appendChild(img);
+                } else if (att.media_type === "audio") {
+                    const audio = document.createElement("audio");
+                    audio.controls = true;
+                    audio.src = att.media_url;
+                    attBox.appendChild(audio);
+                }
+                const link = document.createElement("a");
+                link.href = att.download_url || att.media_url;
+                link.className = "att-link";
+                link.textContent = "Download " + (att.file_name || att.media_type);
+                attBox.appendChild(link);
+            } else if (att.external_url) {
+                const link = document.createElement("a");
+                link.href = att.external_url;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+                link.className = "att-link";
+                link.textContent = "External " + att.media_type + ": " + (att.file_name || att.external_url);
+                attBox.appendChild(link);
+            }
+            bubble.appendChild(attBox);
+        }
+
+        if (m.content) {
+            const textDiv = document.createElement("div");
+            textDiv.className = "msg-text";
+            textDiv.setAttribute("dir", "auto");
+            textDiv.textContent = m.content;
+            bubble.appendChild(textDiv);
+        }
+
+        const meta = document.createElement("div");
+        meta.className = "msg-meta";
+        const who = document.createElement("strong");
+        who.textContent = roleLabel(m.role);
+        const whoWrap = document.createElement("span");
+        whoWrap.appendChild(who);
+        meta.appendChild(whoWrap);
+
+        const ts = document.createElement("span");
+        ts.textContent = m.created_at_display || "";
+        meta.appendChild(ts);
+
+        const status = document.createElement("span");
+        status.textContent = m.delivery_status || "";
+        meta.appendChild(status);
+
+        if (m.external_message_id) {
+            const ext = document.createElement("span");
+            ext.style.fontFamily = "monospace";
+            ext.textContent = "ext: " + m.external_message_id;
+            meta.appendChild(ext);
+        }
+
+        row.appendChild(bubble);
+        row.appendChild(meta);
+        box.appendChild(row);
+        box.scrollTop = box.scrollHeight;
+    }
+
+    setInterval(async function () {
+        if (document.hidden) return;
+        try {
+            const res = await fetch(messagesUrl + "?after_id=" + lastMsgId);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data.success || !Array.isArray(data.messages) || !data.messages.length) return;
+            for (const m of data.messages) {
+                if (m.id > lastMsgId) {
+                    lastMsgId = m.id;
+                    if (!document.querySelector('[data-msg-id="' + m.id + '"]')) {
+                        appendMessage(m);
+                    }
+                }
+            }
+        } catch (_err) {
+            // Ignore transient polling failures
+        }
+    }, 4000);
+})();
+</script>
 </body>
 </html>

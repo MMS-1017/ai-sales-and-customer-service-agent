@@ -572,9 +572,153 @@ def test_admin_conversations_and_link_identity_routes(omni_client, omni_app):
     assert b"Need laptop specs" in res_detail.data
     assert b"Saved agent reply!" in res_detail.data
     assert b"Other Customer Chats" in res_detail.data
+    assert b"Send as Admin" not in res_detail.data
 
     res_missing = omni_client.get("/admin/conversations/999999")
     assert res_missing.status_code == 404
+
+
+def test_admin_agent_toggle_and_manual_reply_across_channels(omni_client, omni_app):
+    with patch("app.services.channel_service.agent_graph.invoke", return_value={"response": "AI initial reply"}) as mock_ai:
+        with patch("app.services.waha_service.WahaService.send_text") as mock_waha:
+            # 1. Start a WhatsApp conversation and a Web Chat conversation in default 'agent' mode
+            r_wa = omni_client.post(
+                "/webhooks/whatsapp",
+                json={
+                    "event": "message",
+                    "session": "default",
+                    "payload": {
+                        "id": "wa_toggle_1",
+                        "from": "201055566677@c.us",
+                        "fromMe": False,
+                        "body": "Hi from WA",
+                        "type": "chat",
+                    },
+                },
+            )
+            assert r_wa.status_code == 200
+
+            r_web = omni_client.post(
+                "/api/chat",
+                json={"message": "Hi from Web", "customer_id": 1, "conversation_id": "web_toggle_1"},
+            )
+            assert r_web.status_code == 200
+            assert mock_ai.call_count == 2
+            assert mock_waha.call_count == 1
+
+    with omni_app.app_context():
+        wa_conv = Conversation.query.filter_by(channel="whatsapp", external_conversation_id="whatsapp:201055566677@c.us").first()
+        web_conv = Conversation.query.filter_by(channel="web_chat", external_conversation_id="web_toggle_1").first()
+        assert wa_conv is not None and wa_conv.response_mode == "agent"
+        assert web_conv is not None and web_conv.response_mode == "agent"
+        wa_conv_id = wa_conv.id
+        web_conv_id = web_conv.id
+
+    # 2. Toggle both conversations to 'admin' mode
+    res_toggle_wa = omni_client.post(
+        f"/admin/conversations/{wa_conv_id}/toggle-mode",
+        data={"mode": "admin"},
+        follow_redirects=False,
+    )
+    assert res_toggle_wa.status_code == 302
+
+    res_toggle_web = omni_client.post(
+        f"/admin/conversations/{web_conv_id}/toggle-mode",
+        data={"mode": "admin"},
+        follow_redirects=False,
+    )
+    assert res_toggle_web.status_code == 302
+
+    # 3. Inbound messages in 'admin' mode must be saved WITHOUT calling AI or auto-replying
+    with patch("app.services.channel_service.agent_graph.invoke") as mock_ai_paused:
+        with patch("app.services.waha_service.WahaService.send_text") as mock_waha_paused:
+            r_wa_2 = omni_client.post(
+                "/webhooks/whatsapp",
+                json={
+                    "event": "message",
+                    "session": "default",
+                    "payload": {
+                        "id": "wa_toggle_2",
+                        "from": "201055566677@c.us",
+                        "fromMe": False,
+                        "body": "Anyone human there?",
+                        "type": "chat",
+                    },
+                },
+            )
+            assert r_wa_2.status_code == 200
+
+            r_web_2 = omni_client.post(
+                "/api/chat",
+                json={"message": "Need a human please", "customer_id": 1, "conversation_id": "web_toggle_1"},
+            )
+            assert r_web_2.status_code == 200
+            web_payload = r_web_2.get_json()
+            assert web_payload["delivery_status"] == "human_handoff"
+            assert web_payload["response"] == ""
+
+            assert mock_ai_paused.call_count == 0
+            assert mock_waha_paused.call_count == 0
+
+    # 4. Admin sends manual replies to WhatsApp and Web Chat
+    with patch("app.services.waha_service.WahaService.send_text", return_value={"id": "waha_admin_out_1"}) as mock_waha_admin:
+        r_admin_wa = omni_client.post(
+            f"/admin/conversations/{wa_conv_id}/reply",
+            data={"message": "Hello! This is Ahmed from support."},
+            follow_redirects=False,
+        )
+        assert r_admin_wa.status_code == 302
+        mock_waha_admin.assert_called_once_with(
+            "201055566677@c.us",
+            "Hello! This is Ahmed from support.",
+            reply_to=None,
+        )
+
+    r_admin_web = omni_client.post(
+        f"/admin/conversations/{web_conv_id}/reply",
+        data={"message": "Hi on Web Chat, admin here!"},
+        follow_redirects=False,
+    )
+    assert r_admin_web.status_code == 302
+
+    # 5. Verify Web Chat polling returns the admin message and Admin detail/JSON show it
+    poll_res = omni_client.get("/api/chat/messages?conversation_id=web_toggle_1&after_id=0")
+    assert poll_res.status_code == 200
+    poll_json = poll_res.get_json()
+    assert poll_json["response_mode"] == "admin"
+    assert [m["content"] for m in poll_json["messages"]] == ["Hi on Web Chat, admin here!"]
+
+    detail_wa = omni_client.get(f"/admin/conversations/{wa_conv_id}")
+    assert detail_wa.status_code == 200
+    assert b"Anyone human there?" in detail_wa.data
+    assert b"Hello! This is Ahmed from support." in detail_wa.data
+    assert b"Admin (You)" in detail_wa.data
+    assert b"Send as Admin" in detail_wa.data
+
+    msgs_json = omni_client.get(f"/admin/conversations/{wa_conv_id}/messages?after_id=0")
+    assert msgs_json.status_code == 200
+    assert any(m["role"] == "admin" for m in msgs_json.get_json()["messages"])
+
+    # 6. Toggle back to 'agent' mode -> AI resumes automatically
+    omni_client.post(f"/admin/conversations/{wa_conv_id}/toggle-mode", follow_redirects=False)
+    with patch("app.services.channel_service.agent_graph.invoke", return_value={"response": "AI resumed!"}) as mock_ai_resumed:
+        with patch("app.services.waha_service.WahaService.send_text") as mock_waha_resumed:
+            omni_client.post(
+                "/webhooks/whatsapp",
+                json={
+                    "event": "message",
+                    "session": "default",
+                    "payload": {
+                        "id": "wa_toggle_3",
+                        "from": "201055566677@c.us",
+                        "fromMe": False,
+                        "body": "Thanks, back to AI question",
+                        "type": "chat",
+                    },
+                },
+            )
+            assert mock_ai_resumed.call_count == 1
+            assert mock_waha_resumed.call_count == 1
 
 
 def test_tools_preserve_contract_while_prompt_redacts_exact_stock(omni_app):

@@ -26,6 +26,7 @@ class OutboundMessagingService:
         registry: ChannelRegistry | None = None,
         max_retries: int = 2,
         retry_backoff_base: float = 0.25,
+        role: str = "assistant",
     ) -> ChannelDeliveryResult:
         from app.channels import ChannelDeliveryError, ChannelDeliveryResult, get_channel_registry
 
@@ -56,6 +57,7 @@ class OutboundMessagingService:
                 conversation=conversation,
                 outbound=outbound,
                 delivery_status="pending",
+                role=role,
             )
 
         last_error: Exception | None = None

@@ -18,6 +18,9 @@ let audioChunks = [];
 let recordedAudioBlob = null;
 let recordInterval = null;
 let recordSeconds = 0;
+let lastAdminMessageId = 0;
+let adminPollTimer = null;
+let handoffNoticeShown = false;
 
 
 function addMessage(message, role, media = null) {
@@ -231,7 +234,19 @@ chatForm.addEventListener("submit", async (event) => {
             throw new Error(data.error || "Something went wrong.");
         }
 
-        addMessage(data.response, "assistant");
+        ensureAdminPolling();
+
+        if (data.delivery_status === "human_handoff") {
+            if (!handoffNoticeShown) {
+                addMessage("A human support agent has joined this chat and will reply shortly.", "assistant");
+                handoffNoticeShown = true;
+            }
+        } else {
+            handoffNoticeShown = false;
+            if (data.response) {
+                addMessage(data.response, "assistant");
+            }
+        }
 
     } catch (error) {
         addMessage(
@@ -243,3 +258,35 @@ chatForm.addEventListener("submit", async (event) => {
         messageInput.focus();
     }
 });
+
+
+async function pollAdminMessages() {
+    if (document.hidden) return;
+    try {
+        const res = await fetch(
+            `/api/chat/messages?conversation_id=${encodeURIComponent(conversationId)}&after_id=${lastAdminMessageId}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.success || !Array.isArray(data.messages)) return;
+        for (const msg of data.messages) {
+            if (msg.id > lastAdminMessageId) {
+                lastAdminMessageId = msg.id;
+            }
+            if (msg.content) {
+                addMessage(`Admin: ${msg.content}`, "assistant");
+            }
+        }
+        if (data.response_mode === "agent") {
+            handoffNoticeShown = false;
+        }
+    } catch (_err) {
+        // Ignore transient polling errors
+    }
+}
+
+
+function ensureAdminPolling() {
+    if (adminPollTimer !== null) return;
+    adminPollTimer = setInterval(pollAdminMessages, 3000);
+}

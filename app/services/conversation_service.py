@@ -8,7 +8,13 @@ from flask import has_app_context
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
-from app.models import Conversation, Customer, Message, MessageAttachment
+from app.models import (
+    Conversation,
+    Customer,
+    CustomerChannelIdentity,
+    Message,
+    MessageAttachment,
+)
 from app.schemas import (
     UnifiedAttachment,
     UnifiedIncomingMessage,
@@ -29,7 +35,42 @@ class ConversationService:
 
     MAX_HISTORY: int = 20
     MAX_CONVERSATIONS: int = 1000
+    VALID_RESPONSE_MODES: set[str] = {"agent", "admin"}
     _conversations: dict[str, list[str]] = {}
+
+    @classmethod
+    def set_response_mode(cls, conversation: Conversation, mode: str) -> Conversation:
+        """Switch a conversation between 'agent' (AI auto-reply) and 'admin' (human takeover)."""
+        normalized = (mode or "").strip().lower()
+        if normalized not in cls.VALID_RESPONSE_MODES:
+            raise ValueError(f"Unsupported response mode: {mode!r}")
+        conversation.response_mode = normalized
+        db.session.commit()
+        return conversation
+
+    @staticmethod
+    def resolve_recipient_id(conversation: Conversation) -> str:
+        """Resolve the channel-native recipient identifier for sending outbound messages."""
+        meta_user_id = (conversation.metadata_json or {}).get("external_user_id")
+        if meta_user_id:
+            return str(meta_user_id).strip()
+
+        ext_conv_id = (conversation.external_conversation_id or "").strip()
+        prefix = f"{conversation.channel}:"
+        if ext_conv_id.startswith(prefix) and len(ext_conv_id) > len(prefix):
+            return ext_conv_id[len(prefix):]
+
+        identity = CustomerChannelIdentity.query.filter_by(
+            customer_id=conversation.customer_id,
+            channel=conversation.channel,
+            channel_account_id=conversation.channel_account_id or "",
+        ).first()
+        if identity and identity.external_user_id:
+            return identity.external_user_id
+
+        if conversation.channel == "web_chat":
+            return f"customer:{conversation.customer_id}"
+        return ext_conv_id
 
     @classmethod
     def resolve_or_create_conversation(
@@ -172,8 +213,9 @@ class ConversationService:
         delivery_status: str = "pending",
         external_message_id: str | None = None,
         metadata: dict | None = None,
+        role: str = "assistant",
     ) -> Message:
-        """Persist an outbound agent message record."""
+        """Persist an outbound agent or admin message record."""
         merged_meta = dict(outbound.metadata or {})
         if outbound.reply_to_external_message_id:
             merged_meta["reply_to_external_message_id"] = outbound.reply_to_external_message_id
@@ -187,7 +229,7 @@ class ConversationService:
             channel=outbound.channel,
             channel_account_id=outbound.channel_account_id,
             direction="outbound",
-            role="assistant",
+            role=role,
             external_message_id=external_message_id,
             message_type="mixed" if outbound.attachments else "text",
             content=outbound.text,
@@ -287,7 +329,7 @@ class ConversationService:
                 continue
             msgs.reverse()
             turns = " | ".join(
-                f"{'Customer' if m.role == 'customer' else 'Agent'}: {m.content[:180]}"
+                f"{'Customer' if m.role == 'customer' else ('Admin' if m.role == 'admin' else 'Agent')}: {m.content[:180]}"
                 for m in msgs
                 if m.content
             )

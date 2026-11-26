@@ -15,6 +15,7 @@ from app.models import (
     OrderItem,
     KnowledgeDocument,
     MediaFile,
+    ensure_schema_columns,
 )
 
 # Blueprints responsible for routes
@@ -69,6 +70,7 @@ def create_app(test_config=None):
     with app.app_context():
         try:
             db.create_all()
+            ensure_schema_columns()
         except Exception as exc:
             print(f"[WARNING] db.create_all() failed: {exc}")
 

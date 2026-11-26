@@ -27,6 +27,7 @@ class Conversation(db.Model):
     channel_account_id = db.Column(db.String(128), nullable=False, default="")
     external_conversation_id = db.Column(db.String(255), nullable=False, index=True)
     status = db.Column(db.String(32), nullable=False, default="open", index=True)
+    response_mode = db.Column(db.String(16), nullable=False, default="agent", index=True)  # agent | admin
     summary = db.Column(db.Text, nullable=True)
     metadata_json = db.Column(db.JSON, nullable=False, default=dict)
     started_at = db.Column(

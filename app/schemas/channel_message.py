@@ -273,6 +273,7 @@ class UnifiedAgentResponse(BaseModel):
             "response": self.response,
             "intent": self.intent,
             "tool_result": self.tool_result,
+            "delivery_status": self.delivery_status,
         }
         if self.media_records:
             primary = self.media_records[0]
